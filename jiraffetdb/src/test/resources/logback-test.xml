@@ -1,0 +1,18 @@
+<configuration>
+    <appender name="STDERR"
+              class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n
+            </pattern>
+        </encoder>
+        <target>System.err</target>
+    </appender>
+
+    <logger name="com.github.basking2.jiraffet.db.LogMapper" level="info" />
+
+    <!-- turn OFF all logging (children can override) -->
+    <root level="DEBUG">
+        <appender-ref ref="STDERR" />
+    </root>
+</configuration>

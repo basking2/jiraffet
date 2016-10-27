@@ -59,7 +59,7 @@ public class Jiraffet
 
     private JiraffetIO io;
 
-    final VersionVoter versionVoter = new VersionVoter(io.nodeCount());
+    final VersionVoter versionVoter;
 
     /**
      * How long should the algorithm wait for messages.
@@ -90,16 +90,26 @@ public class Jiraffet
      */
     private long leaderTimeoutMs;
 
-    public Jiraffet(final LogDao log, final JiraffetIO io) {
+    /**
+     * @param id How we are identified on the network. This must be sufficient for other nodes to connect to us
+     *           as it will be advertised and used when we vote for ourselves.
+     * @param log Where entries are committed and applied. Also it holds some persistent state such
+     *            as the current term and whom we last voted for.
+     * @param io How messsages are sent to other nodes.
+     */
+    public Jiraffet(final String id, final LogDao log, final JiraffetIO io) {
         this.io = io;
         this.log = log;
         this.mode = State.FOLLOWER;
-        this.id = UUID.randomUUID().toString();
+        this.id = id;
         this.commitIndex = 0;
         this.lastApplied = 0;
+        this.leaderTimeoutMs = 500;
+        this.electionTimeoutMs = 2 * this.leaderTimeoutMs;
         this.nextIndex = new HashMap<>();
         this.running = false;
         this.receiveTimer = new Timer(leaderTimeoutMs);
+        this.versionVoter = new VersionVoter(io.nodeCount());
     }
 
 
@@ -382,24 +392,6 @@ public class Jiraffet
     }
 
     /**
-     * Invoked by candidates to gether votes.
-     *
-     * This is the candidate side of the function.
-     *
-     * @return A request to send to all cluster members.
-     * @throws IOException on any error.
-     */
-    public RequestVoteRequest requestVote() throws IOException
-    {
-        // Vote for yourself.
-        log.setCurrentTerm(log.getCurrentTerm()+1);
-        log.setVotedFor(id);
-
-        // Build and return a request to send to all other system.
-        return new RequestVoteRequest(log.getCurrentTerm(), id, log.last());
-    }
-
-    /**
      * Invoked by candidates to gather votes.
      *
      * This is the follower side of the function.
@@ -435,17 +427,20 @@ public class Jiraffet
      */
     public void startElection() {
         try {
-            mode = State.CANDIDATE;
+            if (mode != State.CANDIDATE) {
+                mode = State.CANDIDATE;
+                log.setCurrentTerm(log.getCurrentTerm() + 1);
+            }
+
             // votes = 1, we vote for ourselves.
             votes = 1;
             log.setVotedFor(id);
+            versionVoter.clear();
 
             // There is no current leader.
             currentLeader = null;
 
-            versionVoter.clear();
-            log.setCurrentTerm(log.getCurrentTerm()+1);
-            io.requestVotes(requestVote());
+            io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), id, log.last()));
 
             receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
         }

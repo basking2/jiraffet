@@ -3,8 +3,11 @@ package com.github.basking2.jiraffet;
 import com.github.basking2.jiraffet.messages.*;
 
 import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * How Jiraffet messages are encoded and decoded.

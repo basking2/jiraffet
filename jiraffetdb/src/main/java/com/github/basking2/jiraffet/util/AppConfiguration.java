@@ -24,6 +24,9 @@ public class AppConfiguration  extends CompositeConfiguration {
         this.name = name;
         addDefaults();
     }
+    public AppConfiguration(final Class<?> clazz){
+        this(clazz.getSimpleName().toLowerCase());
+    }
 
     public String getName() {
         return name;
@@ -35,6 +38,7 @@ public class AppConfiguration  extends CompositeConfiguration {
             final File properties = new File(prefix, file);
             if (properties.canRead()) {
                 final PropertiesConfiguration fileProperties = new PropertiesConfiguration();
+                fileProperties.append(new SystemConfiguration());
 
                 try (final InputStream is = new FileInputStream(properties)) {
                     fileProperties.load(is);
@@ -56,6 +60,7 @@ public class AppConfiguration  extends CompositeConfiguration {
         // Load classpath properties.
         try {
             final PropertiesConfiguration classpathProperties = new PropertiesConfiguration();
+            classpathProperties.append(new SystemConfiguration());
             classpathProperties.load(clazz.getResourceAsStream(resource));
             addConfiguration(classpathProperties);
         } catch (final ConfigurationException | NullPointerException e) {

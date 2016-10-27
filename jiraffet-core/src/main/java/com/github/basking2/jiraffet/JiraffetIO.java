@@ -79,4 +79,18 @@ public interface JiraffetIO
      * @return the list of nodes this IO layer knows about. This makes up the cluster.
      */
     List<String> nodes();
+
+    /**
+     * This call relays a list of ClientRequests to the local instance of {@link Jiraffet}.
+     *
+     * It is expected that a client facade will call this and report back to the client
+     * the status of the call to this local node.
+     *
+     * For example, a Servlet might be what calls this code, submitting a client HTTP POST as the
+     * data and responding with a JSON encoding when {@link ClientRequest#complete(boolean, String, String)} is called.
+     *
+     * @param clientRequests A list of client requests to submit. This may, in practice, always be 1, but
+     *                       as Raft allows for many client requests in a transaction, we offer that to the user.
+     */
+    void clientRequest(final List<ClientRequest> clientRequests);
 }

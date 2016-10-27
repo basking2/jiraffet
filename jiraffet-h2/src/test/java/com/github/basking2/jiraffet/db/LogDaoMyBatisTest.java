@@ -1,5 +1,6 @@
 package com.github.basking2.jiraffet.db;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -14,7 +15,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.github.basking2.jiraffet.LogDao;
@@ -38,7 +38,7 @@ public class LogDaoMyBatisTest {
     }
     @AfterClass public static void cleanup() throws Exception {
         database.close();
-        //dir.close();
+        dir.close();
     }
 
     @Test public void testSetCurrentTerm() throws IOException {
@@ -73,14 +73,13 @@ public class LogDaoMyBatisTest {
         assertFalse(db.hasEntry(meta.getIndex()+1, meta.getTerm()));
         assertFalse(db.hasEntry(meta.getIndex(), meta.getTerm()+1));
 
-        db.apply(Integer.MAX_VALUE);
         db.remove(Integer.MIN_VALUE);
         assertNull(db.getMeta(meta.getIndex()));
     }
-
-    /*
-    byte[] read(int index) throws IOException;
-    void write(int term, int index, byte[] data) throws IOException;
-    */
-
+    
+    @Test public void testRead() throws IOException {
+        final byte[] data = new byte[]{ 1, 2, 3, 4 };
+        db.write(2, 1, data);
+        assertArrayEquals(data, db.read(1));
+    }
 }

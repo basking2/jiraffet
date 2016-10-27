@@ -1,7 +1,17 @@
 package com.github.basking2.jiraffet.db;
 
+import java.util.List;
+
+import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.annotations.ConstructorArgs;
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Result;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.type.JdbcType;
+
 import com.github.basking2.jiraffet.LogDao;
-import org.apache.ibatis.annotations.*;
 
 public interface LogMapper {
 
@@ -24,8 +34,14 @@ public interface LogMapper {
     })
     LogDao.EntryMeta getMeta(int index);
 
-    @Select("SELECT data FROM ENTRIES WHERE index = #{value}")
-    byte[] read(int index);
+    @Select("SELECT data FROM ENTRIES WHERE index = #{value} LIMIT 1")
+    @Result(
+            column="data",
+            jdbcType=JdbcType.BLOB,
+            javaType=byte[].class,
+            typeHandler=ByteArrayBlobTypeHandler.class
+            )
+    List<byte[]> read(int index);
 
     @Select("SELECT COUNT(1) FROM ENTRIES WHERE index = #{index} AND term = #{term}")
     Integer hasEntry(@Param("index") int index, @Param("term") int term);
@@ -36,8 +52,11 @@ public interface LogMapper {
     @Delete("DELETE FROM ENTRIES WHERE index >= #{value}")
     void remove(int i);
 
-    @Update("UPDATE ENTRIES SET applied = true WHERE index <= #{value}")
+    @Update("UPDATE ENTRIES SET applied = true WHERE index = #{value}")
     void apply(int index);
+    
+    @Select("SELECT MAX(index) FROM ENTRIES WHERE applied = true")
+    Integer getLastApplied();
 
     @Select("SELECT index, term FROM ENTRIES ORDER BY index ASC LIMIT 1")
     @ConstructorArgs({

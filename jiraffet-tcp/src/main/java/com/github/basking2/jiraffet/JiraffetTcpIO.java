@@ -28,6 +28,12 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     private Map<SocketAddress, WritableByteChannel> writableByteChannels;
     private LinkedBlockingQueue<Message> messages;
 
+    /**
+     * Constructor.
+     * @param listen Socket address to listen on.
+     * @param nodes A list of nodes by jiraffet://host:port format.
+     * @throws IOException On binding errors.
+     */
     public JiraffetTcpIO(final SocketAddress listen, final List<String> nodes) throws IOException {
         this.selector = Selector.open();
         this.nodes = nodes;
@@ -37,6 +43,10 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         ServerSocketChannel chan = ServerSocketChannel.open().bind(listen);
         chan.configureBlocking(false);
         chan.register(selector, SelectionKey.OP_ACCEPT);
+    }
+
+    public JiraffetTcpIO(final String listen, final List<String> nodes) throws IOException {
+        this(toSocketAddress(listen), nodes);
     }
 
     public static SocketAddress toSocketAddress(final String string) {
@@ -49,11 +59,14 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         return new InetSocketAddress(uri.getHost(), uri.getPort());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<Message> getMessages(long timeout, TimeUnit timeunit) throws IOException, TimeoutException, InterruptedException {
         final Timer timer = new Timer(timeout, timeunit);
 
-        List<Message> msg = new ArrayList<>(messages.size());
+        final List<Message> msg = new ArrayList<>(messages.size());
 
         int numReady = selector.select(timer.remaining());
         if (numReady > 0) {
@@ -66,6 +79,13 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         return msg;
     }
 
+    /**
+     * Called by {@link #getMessages(long, TimeUnit)} with a {@link Timer} to limit the waiting and work done.
+     *
+     * @param timer Timer to limit the work and waiting.
+     * @throws InterruptedException On thread interruption.
+     * @throws IOException On an error that will stop any future progress.
+     */
     public void receiveMessages(final Timer timer) throws InterruptedException, IOException {
         for (final SelectionKey key : selector.selectedKeys()) {
             if (key.isReadable()) {
@@ -99,6 +119,15 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         socketChannel.register(selector, SelectionKey.OP_READ, new KeySelectionAttachment());
     }
 
+    /**
+     * Called by {@link #registerChannel(SocketChannel)} to handle selected channels.
+     *
+     * @param timer How long may this spend waiting for data.
+     * @param in Input channel.
+     * @param attachment How to store state about the channel.
+     * @throws IOException On any fatal IO error.
+     * @throws InterruptedException On thread interruption.
+     */
     public void receiveMessages(final Timer timer, ReadableByteChannel in, KeySelectionAttachment attachment)
             throws IOException, InterruptedException
     {
@@ -178,6 +207,17 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
             header.position(0);
             header.limit(8);
             body = null;
+        }
+    }
+
+    @Override
+    public void clientRequest(final List<ClientRequest> clientRequests) {
+        for (final ClientRequest clientRequest : clientRequests) {
+            try {
+                messages.put(clientRequest);
+            } catch (final InterruptedException e) {
+                clientRequest.complete(false, "[unknown]", "Submission to local node failed: "+e.getMessage());
+            }
         }
     }
 }

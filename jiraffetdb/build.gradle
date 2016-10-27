@@ -1,5 +1,9 @@
 apply plugin: 'java'
+apply plugin: 'application'
 apply plugin: 'org.asciidoctor.convert'
+
+mainClassName = 'com.github.basking2.jiraffet.JiraffetDbMain'
+applicationDefaultJvmArgs=[]
 
 // group = defined by parent.
 // archiveBaseName = defined by parent and project name.
@@ -27,15 +31,17 @@ signing {
     sign configurations.archives
 }
 dependencies {
-    compile project(':jiraffet-core')
+    compile 'ch.qos.logback:logback-classic:1.1.7'
+    compile project(':jiraffet-tcp')
+    compile project(':jiraffet-h2')
 
-    // Database.
-    compile 'org.flywaydb:flyway-core:4.0.3'
-    compile 'org.mybatis:mybatis:3.4.1'
-    compile 'com.h2database:h2:1.4.192'
+    //compile 'org.apache.commons:commons-compress:1.11'
     compile 'commons-io:commons-io:2.5'
 
+    //compile 'org.tukaani:xz:1.5'
+    compile 'commons-configuration:commons-configuration:1.10'
+    //compile 'com.google.guava:guava:19.0'
+
     testCompile 'junit:junit:4.12'
-    testCompile 'org.slf4j:slf4j-simple:1.7.21'
 }
 

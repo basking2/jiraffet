@@ -1,15 +1,14 @@
 package com.github.basking2.jiraffet.db;
 
-import org.apache.ibatis.type.TypeHandler;
 import java.io.InputStream;
-import java.sql.SQLException;
+import java.sql.Blob;
 import java.sql.CallableStatement;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Blob;
+import java.sql.SQLException;
 
 import org.apache.ibatis.type.JdbcType;
-import org.apache.ibatis.type.MappedJdbcTypes;
+import org.apache.ibatis.type.TypeHandler;
 
 public class BlobTypeHandler implements TypeHandler<InputStream>
 {

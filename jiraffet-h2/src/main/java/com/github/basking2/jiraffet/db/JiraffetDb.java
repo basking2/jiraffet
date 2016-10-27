@@ -56,6 +56,10 @@ public class JiraffetDb implements AutoCloseable {
                 java.io.InputStream.class,
                 BlobTypeHandler.class
         );
+        configuration.getTypeHandlerRegistry().register(
+                byte[].class,
+                ByteArrayBlobTypeHandler.class
+        );
 
         configuration.addMapper(LogMapper.class);
 
