@@ -25,7 +25,7 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetTcpIO.class);
     private Selector selector;
     private List<String> nodes;
-    private Map<URI, WritableByteChannel> writableByteChannels;
+    private Map<SocketAddress, WritableByteChannel> writableByteChannels;
     private LinkedBlockingQueue<Message> messages;
 
     public JiraffetTcpIO(final SocketAddress listen, final List<String> nodes) throws IOException {
@@ -37,6 +37,16 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         ServerSocketChannel chan = ServerSocketChannel.open().bind(listen);
         chan.configureBlocking(false);
         chan.register(selector, SelectionKey.OP_ACCEPT);
+    }
+
+    public static SocketAddress toSocketAddress(final String string) {
+        final URI uri = URI.create(string);
+
+        if (!uri.getScheme().equals("jiraffet")) {
+            throw new IllegalArgumentException("Scheme must be \"jiraffet\".");
+        }
+
+        return new InetSocketAddress(uri.getHost(), uri.getPort());
     }
 
     @Override
@@ -66,9 +76,27 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
                         );
             }
             else if (key.isAcceptable()) {
-                // FIXME
+                final ServerSocketChannel serverSocketChannel = (ServerSocketChannel)key.channel();
+                final SocketChannel socketChannel = serverSocketChannel.accept();
+                registerChannel(socketChannel);
             }
         }
+    }
+
+    /**
+     * Do the work of putting the channel in the receive selector and in the sending map.
+     *
+     * There are two callers of this method. The first is when the {@link ServerSocketChannel} accepts
+     * a new connection. The second is when the user tries to send a message to another node but now
+     * {@link WritableByteChannel} exists yet.
+     *
+     * @param socketChannel The socket to store.
+     * @throws IOException On any IO error.
+     */
+    public void registerChannel(final SocketChannel socketChannel) throws IOException {
+        writableByteChannels.put(socketChannel.getLocalAddress(), socketChannel);
+        socketChannel.configureBlocking(false);
+        socketChannel.register(selector, SelectionKey.OP_READ, new KeySelectionAttachment());
     }
 
     public void receiveMessages(final Timer timer, ReadableByteChannel in, KeySelectionAttachment attachment)
@@ -107,13 +135,13 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     @Override
     protected WritableByteChannel getOutputStream(String id) throws IOException {
 
-        final URI uri = URI.create(id);
-        if (writableByteChannels.containsKey(uri)) {
-            return writableByteChannels.get(uri);
+        final SocketAddress addr = toSocketAddress(id);
+        if (writableByteChannels.containsKey(addr)) {
+            return writableByteChannels.get(addr);
         }
         else {
-            final SocketChannel chan = SocketChannel.open(new InetSocketAddress(uri.getHost(), uri.getPort()));
-            writableByteChannels.put(uri, chan);
+            final SocketChannel chan = SocketChannel.open(addr);
+            registerChannel(chan);
             return chan;
         }
     }
@@ -132,11 +160,11 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     }
 
     public static class KeySelectionAttachment {
-        /** 
+        /**
          * Header described by {@link JiraffetProtocol#unmarshal(ByteBuffer, ByteBuffer)}.
          */
         public ByteBuffer header = ByteBuffer.allocate(8);
-        
+
         /**
          * Body described by {@link JiraffetProtocol#unmarshal(ByteBuffer, ByteBuffer)}.
          */

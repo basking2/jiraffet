@@ -1,3 +1,4 @@
 rootProject.name='jiraffet'
 include 'jiraffet-core'
+include 'jiraffet-h2'
 include 'jiraffet-tcp'

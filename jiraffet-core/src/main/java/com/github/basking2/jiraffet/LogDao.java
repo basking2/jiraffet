@@ -72,6 +72,15 @@ public interface LogDao {
         private int term;
         private int index;
 
+        public EntryMeta(Integer term, Integer index){
+            this.term = term;
+            this.index = index;
+        }
+
+        public EntryMeta() {
+            this(0,0);
+        }
+
         public int getTerm() {
             return term;
         }

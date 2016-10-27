@@ -2,7 +2,6 @@ package com.github.basking2.jiraffet;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -34,10 +33,10 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
     public void requestVotes(RequestVoteRequest req) throws IOException {
         final ByteBuffer bb = jiraffetProtocol.marshal(req);
 
+        bb.position(0);
+
         for (final String node : nodes()) {
-            final WritableByteChannel out = getOutputStream(node);
-            bb.position(0);
-            out.write(bb);
+            write(bb.slice(), getOutputStream(node));
         }
         
     }
@@ -49,8 +48,7 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
         final ByteBuffer bb = jiraffetProtocol.marshal(req);
 
         bb.position(0);
-        getOutputStream(candidateId).write(bb);
-
+        write(bb, getOutputStream(candidateId));
     }
 
     @Override
@@ -59,17 +57,16 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
         final ByteBuffer bb = jiraffetProtocol.marshal(req);
 
         bb.position(0);
-        getOutputStream(id).write(bb);
+        write(bb, getOutputStream(id));
     }
 
     @Override
     public void appendEntries(String id, AppendEntriesResponse resp) throws IOException {
 
         final ByteBuffer bb = jiraffetProtocol.marshal(resp);
+
         bb.position(0);
-        
-        getOutputStream(id).write(bb);
-        
+        write(bb, getOutputStream(id));
     }
 
     @Override
@@ -84,4 +81,16 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
     public abstract List<String> nodes();
     protected abstract WritableByteChannel getOutputStream(String id) throws IOException;
 
+    /**
+     * Set position to 0 and write from {@link ByteBuffer#position()} to {@link ByteBuffer#limit()}.
+     *
+     * @param bb Byte buffer to write.
+     * @param chan The channel to write to.
+     * @throws IOException On any exception.
+     */
+    public void write(final ByteBuffer bb, WritableByteChannel chan) throws IOException {
+        while (bb.position() < bb.limit()) {
+            chan.write(bb);
+        }
+    }
 }
