@@ -174,6 +174,7 @@ public class Jiraffet
             if (req.getTerm() > log.getCurrentTerm()) {
                 LOG.info("New leader {}.", req.getLeaderId());
                 log.setVotedFor(null);
+                log.setCurrentTerm(req.getTerm());
                 mode = State.FOLLOWER;
                 currentLeader = req.getLeaderId();
                 receiveTimer.set(followerTimeoutMs);
@@ -328,6 +329,9 @@ public class Jiraffet
                         continue;
                     }
 
+                    // Sanity check.
+                    throw new RuntimeException("We got a message we do not know how to handle: "+m);
+
                 } // after for-messages loop.
 
                 // Note: We do not check our timer but rely on it to throw a TimeoutException at which point
@@ -340,7 +344,7 @@ public class Jiraffet
                 LOG.error("Event loop", e);
             }
             catch (final InterruptedException e) {
-                // Nop.
+                LOG.error("Interrupted exception in event loop", e);
             }
             catch (final TimeoutException e) {
                 switch (mode) {
@@ -374,6 +378,9 @@ public class Jiraffet
     }
 
     private void appendEntries(final List<ClientRequest> clientRequests) throws JiraffetIOException {
+
+        // Set the timer first to avoid a timeout.
+        receiveTimer.set(leaderTimeoutMs);
 
         // Commit to our local store. Don't tell the client we're done yet, though.
         // Do not increment commitIndex until the majority of followers acknowledge a write.
@@ -413,8 +420,6 @@ public class Jiraffet
             final AppendEntriesRequest req = appendEntries(id);
             io.appendEntries(id, req);
         }
-
-        receiveTimer.set(leaderTimeoutMs);
     }
 
     /**
