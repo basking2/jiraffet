@@ -12,6 +12,7 @@ import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.basking2.jiraffet.LogDao.EntryMeta;
 import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
 import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
 import com.github.basking2.jiraffet.messages.ClientRequest;
@@ -444,21 +445,24 @@ public class Jiraffet
 
     public void requestVotes(final RequestVoteRequest req) {
         try {
-            // If it's the wrong term, reject.
+            // If it's an old term, reject.
             if (req.getTerm() <= log.getCurrentTerm()) {
                 io.requestVotes(req.reject());
                 return;
             }
-
-            // We don't know this log entry is persisted, so don't vote.
-            if (!log.hasEntry(req.getLastLogIndex(), req.getLastLogTerm())) {
-                io.requestVotes(req.reject());
-                return;
+            
+            final EntryMeta lastLog = log.last();
+            
+            // If the candidate asking for our vote has logs in the future, we will vote for them.
+            if (req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
+                // If we get here, well, vote!
+                io.requestVotes(req.vote());
+                log.setVotedFor(req.getCandidateId());
             }
-
-            // If we get here, well, vote!
-            io.requestVotes(req.vote());
-            log.setVotedFor(req.getCandidateId());
+            else {
+                // If the potential leader does not have at LEAST our last log entry, reject.
+                io.requestVotes(req.reject());
+            }
         }
         catch (final IOException e) {
             LOG.error("Casting vote.", e);
