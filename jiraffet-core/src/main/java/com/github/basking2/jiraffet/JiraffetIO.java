@@ -25,10 +25,11 @@ public interface JiraffetIO
     /**
      * Send the response.
      *
+     * @param candidateId Candidate ID from the {@link RequestVoteRequest#getCandidateId()}.
      * @param req The request.
      * @throws IOException On any IO error.
      */
-    void requestVotes(RequestVoteResponse req) throws IOException;
+    void requestVotes(String candidateId, RequestVoteResponse req) throws IOException;
 
     /**
      * Append entries to all nodes.
@@ -70,7 +71,7 @@ public interface JiraffetIO
      * @throws IOException On any io error that means the leader can no longer function as the leader.
      *                     Throwing this should be very rare as it kills leadership.
      */
-    List<Message> getMessages(long timeout, TimeUnit timeunit) throws IOException, TimeoutException;
+    List<Message> getMessages(long timeout, TimeUnit timeunit) throws IOException, TimeoutException, InterruptedException;
 
     /**
      * Return the list of nodes this IO layer knows about. This makes up the cluster.

@@ -7,6 +7,14 @@ import java.util.concurrent.TimeoutException;
  * Track time progress, giving the user the time remaining for a timer.
  */
 public class Timer {
+
+    /**
+     * Alias the value {@link TimeUnit#MILLISECONDS}.
+     *
+     * The Timer class expresses things at the resolution of milliseconds.
+     */
+    public static final TimeUnit TIME_UNIT = TimeUnit.MILLISECONDS;
+
     /**
      * The system clock time when this will be expired.
      */

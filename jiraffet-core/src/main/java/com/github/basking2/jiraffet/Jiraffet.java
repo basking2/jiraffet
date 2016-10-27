@@ -305,6 +305,9 @@ public class Jiraffet
             catch (final IOException e) {
                 LOG.error("Event loop", e);
             }
+            catch (final InterruptedException e) {
+                // Nop.
+            }
             catch (final TimeoutException e) {
                 switch (mode) {
                 case LEADER:
@@ -458,10 +461,12 @@ public class Jiraffet
      */
     public void requestVotes(final RequestVoteRequest req) {
         try {
+            final String candidateId = req.getCandidateId();
+            
             // If it's an old term, reject.
             if (req.getTerm() <= log.getCurrentTerm()) {
                 LOG.debug("Rejecting vote request from {} term {}.", req.getCandidateId(), req.getTerm());
-                io.requestVotes(req.reject());
+                io.requestVotes(candidateId, req.reject());
                 return;
             }
             
@@ -471,7 +476,7 @@ public class Jiraffet
             if (req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
                 LOG.debug("Voting for {} term {}.", req.getCandidateId(), req.getTerm());
                 // If we get here, well, vote!
-                io.requestVotes(req.vote());
+                io.requestVotes(candidateId, req.vote());
                 log.setVotedFor(req.getCandidateId());
 
                 // If we vote for them, reset the timeout and continue.
@@ -480,7 +485,7 @@ public class Jiraffet
             else {
                 LOG.debug("Rejecting vote request from {} term {} log term {} log idx {}.", new Object[]{req.getCandidateId(), req.getTerm(), req.getLastLogTerm(), req.getLastLogIndex()});
                 // If the potential leader does not have at LEAST our last log entry, reject.
-                io.requestVotes(req.reject());
+                io.requestVotes(candidateId, req.reject());
             }
         }
         catch (final IOException e) {
