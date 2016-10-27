@@ -207,4 +207,12 @@ public class JiraffetProtocol {
 
         return appendEntriesRequest;
     }
+
+    public int getType(final ByteBuffer header) {
+        return header.getInt(4);
+    }
+
+    public int getLen(final ByteBuffer header) {
+        return header.getInt(0);
+    }
 }
