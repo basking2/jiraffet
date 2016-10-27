@@ -39,7 +39,8 @@ dependencies {
     compile 'commons-io:commons-io:2.5'
 
     //compile 'org.tukaani:xz:1.5'
-    compile 'commons-configuration:commons-configuration:1.10'
+    compile 'commons-beanutils:commons-beanutils:1.9.3'
+    compile 'org.apache.commons:commons-configuration2:2.1'
     //compile 'com.google.guava:guava:19.0'
 
     testCompile 'junit:junit:4.12'

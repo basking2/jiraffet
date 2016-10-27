@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -x
+
+./gradlew clean distZip
+
+pfx=./jiraffetdb/build/distributions
+zip=`ls -1 ${pfx}/jiraffetdb*.zip |tail -1`
+zipbase=`basename $zip`
+
+unzip -o "$zip"
+pids=""
+
+for i in 1 2 3 4 5 ; do
+
+    d=`pwd`/d${i}
+
+    export JIRAFFETDB_OPTS=-Djiraffetdb.home="$d"
+
+    mkdir -p "$d"
+ 
+    ./${zipbase/.zip/}/bin/jiraffetdb >& "$d"/jiraffetdb.log &
+
+    pids="$pids $!"
+done
+
+stopall() {
+  for i in $pids; do
+    echo "killing $i"
+    kill $i
+  done
+}
+
+trap stopall EXIT
+
+wait $pids

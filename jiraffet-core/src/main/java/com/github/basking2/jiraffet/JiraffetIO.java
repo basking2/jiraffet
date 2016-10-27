@@ -1,6 +1,5 @@
 package com.github.basking2.jiraffet;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -18,36 +17,36 @@ public interface JiraffetIO
      * Send the given vote request to all nodes and collect the responses.
      *
      * @param req The Jiraffet vote request.
-     * @throws IOException On any error.
+     * @throws JiraffetIOException On any error.
      */
-    void requestVotes(RequestVoteRequest req) throws IOException;
+    void requestVotes(RequestVoteRequest req) throws JiraffetIOException;
 
     /**
      * Send the response.
      *
      * @param candidateId Candidate ID from the {@link RequestVoteRequest#getCandidateId()}.
      * @param req The request.
-     * @throws IOException On any IO error.
+     * @throws JiraffetIOException On any IO error.
      */
-    void requestVotes(String candidateId, RequestVoteResponse req) throws IOException;
+    void requestVotes(String candidateId, RequestVoteResponse req) throws JiraffetIOException;
 
     /**
      * Append entries to all nodes.
      *
      * @param id The id we are sending to.
      * @param req The request.
-     * @throws IOException On any IO exception.
+     * @throws JiraffetIOException On any IO exception.
      */
-    void appendEntries(String id, AppendEntriesRequest req) throws IOException;
+    void appendEntries(String id, AppendEntriesRequest req) throws JiraffetIOException;
 
     /**
      * Send a response to a {@link #appendEntries(String, AppendEntriesRequest)}.
      *
      * @param id The id of the other node. This is always the current leader when the resp is successful.
      * @param resp The response.
-     * @throws IOException On any IO error.
+     * @throws JiraffetIOException On any IO error.
      */
-    void appendEntries(String id, AppendEntriesResponse resp) throws IOException;
+    void appendEntries(String id, AppendEntriesResponse resp) throws JiraffetIOException;
 
     /**
      * Return the number of nodes this object knows about.
@@ -69,10 +68,10 @@ public interface JiraffetIO
      * @return list of messages from the IO layer. If 0 messages are returned then we act as though we've timed out.
      * @throws TimeoutException When 1/2 the heartbeat interval has passed and no messages have been received.
      * @throws InterruptedException If the waiting thread is interrupted.
-     * @throws IOException On any io error that means the leader can no longer function as the leader.
+     * @throws JiraffetIOException On any io error that means the leader can no longer function as the leader.
      *                     Throwing this should be very rare as it kills leadership.
      */
-    List<Message> getMessages(long timeout, TimeUnit timeunit) throws IOException, TimeoutException, InterruptedException;
+    List<Message> getMessages(long timeout, TimeUnit timeunit) throws JiraffetIOException, TimeoutException, InterruptedException;
 
     /**
      * Return the list of nodes this IO layer knows about. This makes up the cluster.

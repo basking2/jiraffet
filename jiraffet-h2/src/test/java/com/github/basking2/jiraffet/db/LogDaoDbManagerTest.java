@@ -2,12 +2,12 @@ package com.github.basking2.jiraffet.db;
 
 import org.junit.Test;
 
-public class JiraffetDbTest {
+public class LogDaoDbManagerTest {
 
     @Test
     public void testMigrate() throws Exception {
         final EphemeralDirectory dir = new EphemeralDirectory();
-        JiraffetDb db = new JiraffetDb(dir.getTemporaryDirectory().toString());
+        LogDaoDbManager db = new LogDaoDbManager(dir.getTemporaryDirectory().toString());
         db.close();
         dir.close();
     }

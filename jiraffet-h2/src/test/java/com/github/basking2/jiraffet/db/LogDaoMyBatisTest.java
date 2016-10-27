@@ -21,7 +21,7 @@ import com.github.basking2.jiraffet.LogDao;
 
 public class LogDaoMyBatisTest {
     static EphemeralDirectory dir;
-    static JiraffetDb database;
+    static LogDaoDbManager database;
     static LogDaoMyBatis db;
 
     @Before public void setup() throws SQLException, ClassNotFoundException, IOException {
@@ -33,7 +33,7 @@ public class LogDaoMyBatisTest {
     
     @BeforeClass public static void startup() throws IOException, ClassNotFoundException, SQLException {
         dir = new EphemeralDirectory();
-        database = new JiraffetDb(dir.getTemporaryDirectory().toString());
+        database = new LogDaoDbManager(dir.getTemporaryDirectory().toString());
         db = database.getLogDao();
     }
     @AfterClass public static void cleanup() throws Exception {

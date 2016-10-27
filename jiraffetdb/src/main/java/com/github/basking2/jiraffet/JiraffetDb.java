@@ -1,17 +1,16 @@
 package com.github.basking2.jiraffet;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
-import com.github.basking2.jiraffet.db.LogDaoMyBatis;
+import com.github.basking2.jiraffet.db.LogDaoDbManager;
+import com.github.basking2.jiraffet.util.App;
+import org.apache.commons.configuration2.Configuration;
+import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.github.basking2.jiraffet.util.AppConfiguration;
 
 /**
  * How to configure the TCP app.
@@ -19,14 +18,14 @@ import com.github.basking2.jiraffet.util.AppConfiguration;
 public class JiraffetDb {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetDb.class);
 
-    private AppConfiguration appConfiguration;
+    private Configuration appConfiguration;
     private Jiraffet jiraffet;
     private LogDao log;
     private JiraffetIO io;
     private String id;
 
-    public JiraffetDb() {
-        this.appConfiguration = new AppConfiguration(this.getClass());
+    public JiraffetDb() throws ConfigurationException {
+        this.appConfiguration = new App(this.getClass()).buildConfiguration();
     }
 
     private JiraffetIO buildIo() throws IOException {
@@ -81,13 +80,23 @@ public class JiraffetDb {
         return new JiraffetTcpIO(thisNode, otherNodes);
     }
 
+    public LogDao buildLogDao() throws SQLException, ClassNotFoundException {
+        String dbHome = appConfiguration.getString("jiraffetdb.db");
+
+        if (dbHome == null) {
+            dbHome = appConfiguration.getString("jiraffetdb.home") + "/db";
+        }
+
+        final LogDaoDbManager db = new LogDaoDbManager(dbHome);
+
+        return db.getLogDao();
+    }
+
 
     public void start() throws SQLException, ClassNotFoundException, IOException {
         LOG.debug("Starting.");
 
-        com.github.basking2.jiraffet.db.JiraffetDb db = new com.github.basking2.jiraffet.db.JiraffetDb(this.appConfiguration.getString("jiraffetdb.db"));
-
-        this.log = db.getLogDao();
+        this.log = buildLogDao();
 
         // public JiraffetTcpIO(final SocketAddress listen, final List<String> nodes) throws IOException {
         this.io = buildIo();

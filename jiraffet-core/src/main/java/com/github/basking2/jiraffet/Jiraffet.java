@@ -108,7 +108,7 @@ public class Jiraffet
         this.electionTimeoutMs = 2 * this.leaderTimeoutMs;
         this.nextIndex = new HashMap<>();
         this.running = false;
-        this.receiveTimer = new Timer(leaderTimeoutMs);
+        this.receiveTimer = new Timer(electionTimeoutMs);
         this.versionVoter = new VersionVoter(io.nodeCount());
     }
 
@@ -445,7 +445,7 @@ public class Jiraffet
             receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
         }
         catch (final IOException e) {
-            LOG.error("Staring election.", e);
+            LOG.error("Starting election.", e);
         }
     }
 

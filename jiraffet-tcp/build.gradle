@@ -35,7 +35,6 @@ dependencies {
     compile 'commons-io:commons-io:2.5'
 
     //compile 'org.tukaani:xz:1.5'
-    compile 'commons-configuration:commons-configuration:1.10'
     //compile 'com.google.guava:guava:19.0'
     testCompile group: 'org.slf4j', name: 'slf4j-simple', version:'1.7.21'
 

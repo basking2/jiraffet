@@ -13,15 +13,16 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.flywaydb.core.Flyway;
 
 /**
+ * Manage opening, migrating and building database related resources.
  */
-public class JiraffetDb implements AutoCloseable {
+public class LogDaoDbManager implements AutoCloseable {
     private static String DBADMIN_USER = "jiraffet_admin";
     private static String DBADMIN_PASS = "";
 
     private File where;
     private SqlSessionManager sqlSessionManager;
 
-    public JiraffetDb(final String where) throws ClassNotFoundException, SQLException
+    public LogDaoDbManager(final String where) throws ClassNotFoundException, SQLException
     {
         this(new File(where));
     }
@@ -34,7 +35,7 @@ public class JiraffetDb implements AutoCloseable {
      * @throws ClassNotFoundException when the database driver cannot be loaded.
      * @throws SQLException when the database cannot be initialized.
      */
-    public JiraffetDb(final File where) throws ClassNotFoundException, SQLException
+    public LogDaoDbManager(final File where) throws ClassNotFoundException, SQLException
     {
         this.where = new File(where, "db");
 
