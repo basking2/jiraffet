@@ -54,6 +54,9 @@ public class JiraffetDb {
             this.io       = buildIo();
             this.jiraffet = new Jiraffet(io.getNodeId(), log, io);
 
+            this.jiraffet.setLeaderTimeout(3000);
+            this.jiraffet.setFollowerTimeout(5000);
+
             LOG.debug("Starting node {}.", io.getNodeId());
 
             jiraffet.run();
