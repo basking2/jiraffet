@@ -5,10 +5,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
-import com.github.basking2.jiraffet.messages.Message;
-import com.github.basking2.jiraffet.messages.RequestVoteRequest;
-import com.github.basking2.jiraffet.messages.RequestVoteResponse;
+import com.github.basking2.jiraffet.messages.*;
 
 /**
  * Define how Jiraffet communicates with the outside world.
@@ -41,6 +38,15 @@ public interface JiraffetIO
      * @throws IOException On any IO exception.
      */
     void appendEntries(String id, AppendEntriesRequest req) throws IOException;
+
+    /**
+     * Send a response to a {@link #appendEntries(String, AppendEntriesRequest)}.
+     *
+     * @param id The id of the other node. This is always the current leader when the resp is successful.
+     * @param resp The response.
+     * @throws IOException On any IO error.
+     */
+    void appendEntries(String id, AppendEntriesResponse resp) throws IOException;
 
     /**
      * Return the number of nodes this object knows about.

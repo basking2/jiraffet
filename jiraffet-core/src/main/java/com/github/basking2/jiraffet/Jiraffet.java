@@ -62,6 +62,14 @@ public class Jiraffet
     final VersionVoter versionVoter = new VersionVoter(io.nodeCount());
 
     /**
+     * How long should the algorithm wait for messages.
+     *
+     * If messages are received before this, it is an algorithmic choice what the timer value should be.
+     * Should it decrease or be reset?
+     */
+    private Timer receiveTimer;
+
+    /**
      * Is the service running?
      */
     private volatile boolean running;
@@ -91,6 +99,7 @@ public class Jiraffet
         this.lastApplied = 0;
         this.nextIndex = new HashMap<>();
         this.running = false;
+        this.receiveTimer = new Timer(leaderTimeoutMs);
     }
 
 
@@ -127,25 +136,27 @@ public class Jiraffet
      * This is executed on the follower when an AppendEntriesRequest is received.
      *
      * @param req The request.
-     * @return A response to be sent to the leader.
      * @throws IOException Any IO error.
      */
-    public AppendEntriesResponse appendEntries(final AppendEntriesRequest req) throws IOException{
+    public void appendEntries(final AppendEntriesRequest req) throws IOException {
 
-        // If the term is different than our current one adjust our term and make sure we are a follower.
-        if (req.getTerm() > log.getCurrentTerm()) {
-            log.setCurrentTerm(req.getTerm());
-            mode = State.FOLLOWER;
-        }
+        final AppendEntriesResponse resp;
 
-        // There is another leader do not commit this log.
+        // If the leader and term match, try to do this. Reset the timeout to the full value.
         if (req.getTerm() < log.getCurrentTerm()) {
-            return req.reject(id, log.last().getIndex());
+            // Ignore invalid request.
+            resp = req.reject(id, log.last().getIndex());
         }
 
         // If the leader knows the previous log state, we can apply this.
-        if (log.hasEntry(req.getPrevLogIndex(), req.getPrevLogTerm())) {
-            currentLeader = req.getLeaderId();
+        else if (log.hasEntry(req.getPrevLogIndex(), req.getPrevLogTerm())) {
+
+            // If the term is greater, we have a new leader. Adjust things.
+            if (req.getTerm() > log.getCurrentTerm()) {
+                log.setVotedFor(null);
+                mode = State.FOLLOWER;
+                currentLeader = req.getLeaderId();
+            }
 
             int idx = req.getPrevLogIndex();
             for (byte[] entry : req.getEntries()) {
@@ -158,11 +169,15 @@ public class Jiraffet
 
             applyCommitted();
 
-            return req.accept(id);
+            receiveTimer.set(electionTimeoutMs);
+
+            resp = req.accept(id);
         }
         else {
-            return req.reject(id, log.last().getIndex());
+            resp = req.reject(id, log.last().getIndex());
         }
+
+        io.appendEntries(req.getLeaderId(), resp);
 
     }
 
@@ -199,7 +214,7 @@ public class Jiraffet
         currentLeader = log.getVotedFor();
 
         // How long should we wait for messages before we consider things timed out.
-        final Timer timer = new Timer(electionTimeoutMs);
+        receiveTimer = new Timer(electionTimeoutMs);
 
         while (running) {
 
@@ -210,7 +225,7 @@ public class Jiraffet
             try {
 
                 // Wait for messages or timeout.
-                final List<Message> messages = io.getMessages(timer.remaining(), TimeUnit.MILLISECONDS);
+                final List<Message> messages = io.getMessages(receiveTimer.remaining(), TimeUnit.MILLISECONDS);
 
                 // If we get no messages, listen again until our timeout is reached.
                 if (messages.size() == 0) {
@@ -220,59 +235,42 @@ public class Jiraffet
                 // Process all the messages we received.
                 for (final Message m : messages) {
 
-                    // Collect client requests. We must be a leader for this to make sense.
                     if (m instanceof ClientRequest) {
-                        final ClientRequest req = (ClientRequest) m;
-
                         // Batch up messages to send, assuming nothing disrupts us.
-                        clientRequests.add(req);
-
+                        clientRequests.add((ClientRequest)m);
                         continue;
                     }
 
-
-                    // The leader is asking us to write data.
                     if (m instanceof AppendEntriesRequest) {
-                        final AppendEntriesRequest req = (AppendEntriesRequest) m;
-
-                        // If the leader and term match, try to do this. Reset the timeout to the full value.
-                        if (currentLeader.equals(req.getLeaderId()) && log.getCurrentTerm() == req.getTerm()) {
-                            appendEntries(req);
-                            timer.set(electionTimeoutMs);
-                        }
-
+                        appendEntries((AppendEntriesRequest)m);
                         continue;
                     }
 
-
-                    // Someone wants to be have an election.
                     if (m instanceof RequestVoteRequest) {
-                        final RequestVoteRequest req = (RequestVoteRequest) m;
-
                         // Handle vote requests.
-                        requestVotes(req);
-
-                        // If we vote for them, reset the timeout and continue.
-                        timer.set(electionTimeoutMs);
-
+                        requestVotes((RequestVoteRequest)m);
                         continue;
                     }
 
                     // We are a candidate and get a response.
                     if (m instanceof RequestVoteResponse) {
                         final RequestVoteResponse req = (RequestVoteResponse) m;
-                        if (mode == State.CANDIDATE) {
 
-                            if (req.isVoteGranted()) {
-                                votes++;
-                            }
+                        // If we are a candiate and got a vote.
+                        if (mode == State.CANDIDATE && req.isVoteGranted()){
 
+                            votes++;
+
+                            // Should we win the election.
                             if (votes > io.nodeCount() / 2) {
                                 // Heartbeat.
                                 appendEntries(new ArrayList<>(0));
 
+                                mode = State.LEADER;
+                                log.setVotedFor(null);
+
                                 // Use the shorter leader timeout to heartbeat.
-                                timer.set(leaderTimeoutMs);
+                                receiveTimer.set(leaderTimeoutMs);
                             }
                         }
 
@@ -291,15 +289,15 @@ public class Jiraffet
                             // Update the vote totals which may trigger other updates.
                             versionVoter.vote(req.getNextCommitIndex()-1);
 
-                            timer.set(leaderTimeoutMs);
+                            receiveTimer.set(leaderTimeoutMs);
                             break;
                         default:
                         }
 
-                        // This is a response from a slow client. Do nothing.
                         continue;
                     }
-                }
+
+                } // after for-messages loop.
 
                 // After the main message event handling section, send out all messages if our leadership hasn't changed.
                 handleClientRequests(clientRequests);
@@ -311,11 +309,9 @@ public class Jiraffet
                 switch (mode) {
                 case LEADER:
                     appendEntries(clientRequests);
-                    timer.set(leaderTimeoutMs);
                     break;
                 case FOLLOWER:
                 case CANDIDATE:
-                    timer.set(leaderTimeoutMs);
                     startElection();
                     break;
                 }
@@ -378,6 +374,8 @@ public class Jiraffet
             final AppendEntriesRequest req = appendEntries(id);
             io.appendEntries(id, req);
         }
+
+        receiveTimer.set(leaderTimeoutMs);
     }
 
     /**
@@ -409,6 +407,7 @@ public class Jiraffet
      */
     public RequestVoteResponse requestVote(final RequestVoteRequest req) throws IOException
     {
+        // Candidate is requesting a vote for a passed term. Reject.
         if (req.getTerm() < log.getCurrentTerm()) {
             return req.reject();
         }
@@ -418,6 +417,7 @@ public class Jiraffet
             return req.reject();
         }
 
+        // Is the candidate's log at least as up-to-date as our log?
         final LogDao.EntryMeta lastLog = log.last();
         if (req.getLastLogIndex() < lastLog.getIndex() || req.getLastLogTerm() < lastLog.getTerm()) {
             return req.reject();
@@ -427,26 +427,40 @@ public class Jiraffet
 
     }
 
+    /**
+     * Send a {@link RequestVoteRequest} to all. We have not heard anything from a leader in some timeout.
+     */
     public void startElection() {
         try {
             mode = State.CANDIDATE;
             // votes = 1, we vote for ourselves.
             votes = 1;
-            currentLeader = null;
-            versionVoter.clear();
             log.setVotedFor(id);
+
+            // There is no current leader.
+            currentLeader = null;
+
+            versionVoter.clear();
             log.setCurrentTerm(log.getCurrentTerm()+1);
             io.requestVotes(requestVote());
+
+            receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
         }
         catch (final IOException e) {
             LOG.error("Staring election.", e);
         }
     }
 
+    /**
+     * Send a {@link RequestVoteResponse} in respose to req.
+     *
+     * @param req A request for votes received from our IO layer.
+     */
     public void requestVotes(final RequestVoteRequest req) {
         try {
             // If it's an old term, reject.
             if (req.getTerm() <= log.getCurrentTerm()) {
+                LOG.debug("Rejecting vote request from {} term {}.", req.getCandidateId(), req.getTerm());
                 io.requestVotes(req.reject());
                 return;
             }
@@ -455,11 +469,16 @@ public class Jiraffet
             
             // If the candidate asking for our vote has logs in the future, we will vote for them.
             if (req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
+                LOG.debug("Voting for {} term {}.", req.getCandidateId(), req.getTerm());
                 // If we get here, well, vote!
                 io.requestVotes(req.vote());
                 log.setVotedFor(req.getCandidateId());
+
+                // If we vote for them, reset the timeout and continue.
+                receiveTimer.set(electionTimeoutMs);
             }
             else {
+                LOG.debug("Rejecting vote request from {} term {} log term {} log idx {}.", new Object[]{req.getCandidateId(), req.getTerm(), req.getLastLogTerm(), req.getLastLogIndex()});
                 // If the potential leader does not have at LEAST our last log entry, reject.
                 io.requestVotes(req.reject());
             }

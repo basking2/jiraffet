@@ -6,10 +6,35 @@ import java.io.IOException;
  * The Raft Log entry.
  */
 public interface LogDao {
+
+    /**
+     * Set the current term. This is distinct from the term of the last log entry.
+     *
+     * @param currentTerm The current term.
+     * @throws IOException On any error.
+     */
     void setCurrentTerm(int currentTerm) throws IOException;
+
+    /**
+     * Get the current term. This is distinct from teh term of the last log entry.
+     *
+     * @return The current term.
+     * @throws IOException On any error.
+     */
     int getCurrentTerm() throws IOException;
 
+    /**
+     * Set who we voted for.
+     *
+     * @param id The id of who we voted for.
+     * @throws IOException On any error.
+     */
     void setVotedFor(String id) throws IOException;
+
+    /**
+     * @return Who we voted for. This should be reset when a new leader establishes themselves / the term changes.
+     * @throws IOException On any error.
+     */
     String getVotedFor() throws IOException;
 
     EntryMeta getMeta(int index) throws IOException;
