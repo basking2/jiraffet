@@ -1,0 +1,75 @@
+apply plugin: 'java'
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        classpath 'org.asciidoctor:asciidoctor-gradle-plugin:1.5.3'
+    }
+}
+
+allprojects {
+    group = 'com.github.basking2'
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+    version = '0.0.1-SNAPSHOT'
+    description = """Raft implementation in Java."""
+
+}
+
+subprojects {
+
+    apply plugin: 'maven'
+    apply plugin: 'signing'
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+
+    uploadArchives {
+        repositories {
+            mavenDeployer {
+                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+                repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                    authentication(userName: ossrhUsername, password: ossrhPassword)
+                }
+
+                snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                    authentication(userName: ossrhUsername, password: ossrhPassword)
+                }
+
+                pom.project {
+                    packaging 'jar'
+                    // optionally artifactId can be defined here
+                    url 'https://github.com/basking2/jiraffet'
+
+                    scm {
+                        connection 'scm:git:git@github.com:basking2/jiraffet.git'
+                        developerConnection 'git@github.com:basking2/jiraffet.git'
+                        url 'https://github.com/basking2/jiraffet.git'
+                    }
+
+                    licenses {
+                        license {
+                            name 'MIT'
+                            url 'https://opensource.org/licenses/MIT'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id 'basking2'
+                            name 'Sam'
+                            email 'basking2@yahoo.com'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+

@@ -1,0 +1,2 @@
+rootProject.name='jiraffet'
+include 'jiraffet-core'
