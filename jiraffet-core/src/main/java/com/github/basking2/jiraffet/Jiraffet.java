@@ -130,11 +130,19 @@ public class Jiraffet
 
         final int index = nextIndex.get(id);
 
+        final List<byte[]> entries;
 
-        final List<byte[]> entries = new ArrayList<>(commitIndex - index);
+        // If we have fewer commitIndex values than another node... that is strange. Send an empty log.
+        if (commitIndex < index) {
+            entries = new ArrayList<>();
+        }
+        else {
 
-        for (int i = index; i < commitIndex; ++i) {
-            entries.add(log.read(i));
+            entries = new ArrayList<>(commitIndex - index);
+
+            for (int i = index; i < commitIndex; ++i) {
+                entries.add(log.read(i));
+            }
         }
 
         return new AppendEntriesRequest(log.getCurrentTerm(), currentLeader, log.getMeta(index-1), entries, commitIndex);
