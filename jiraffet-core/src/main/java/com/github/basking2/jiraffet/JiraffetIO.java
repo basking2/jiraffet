@@ -68,6 +68,7 @@ public interface JiraffetIO
      *
      * @return list of messages from the IO layer. If 0 messages are returned then we act as though we've timed out.
      * @throws TimeoutException When 1/2 the heartbeat interval has passed and no messages have been received.
+     * @throws InterruptedException If the waiting thread is interrupted.
      * @throws IOException On any io error that means the leader can no longer function as the leader.
      *                     Throwing this should be very rare as it kills leadership.
      */

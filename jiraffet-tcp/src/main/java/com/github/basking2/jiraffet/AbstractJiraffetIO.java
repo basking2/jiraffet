@@ -20,7 +20,7 @@ import com.github.basking2.jiraffet.messages.RequestVoteResponse;
  */
 public abstract class AbstractJiraffetIO implements JiraffetIO {
 
-    private JiraffetProtocol jiraffetProtocol;
+    protected JiraffetProtocol jiraffetProtocol;
 
     public AbstractJiraffetIO(final JiraffetProtocol jiraffetProtocol) {
         this.jiraffetProtocol = jiraffetProtocol;
@@ -82,6 +82,6 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
 
     @Override
     public abstract List<String> nodes();
-    protected abstract WritableByteChannel getOutputStream(String id);
+    protected abstract WritableByteChannel getOutputStream(String id) throws IOException;
 
 }

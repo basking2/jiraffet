@@ -6,11 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.URI;
 import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.WritableByteChannel;
+import java.nio.channels.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,14 +25,18 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetTcpIO.class);
     private Selector selector;
     private List<String> nodes;
-    private Map<String, WritableByteChannel> writableByteChannels;
+    private Map<URI, WritableByteChannel> writableByteChannels;
     private LinkedBlockingQueue<Message> messages;
 
-    public JiraffetTcpIO(final List<String> nodes) throws IOException {
+    public JiraffetTcpIO(final SocketAddress listen, final List<String> nodes) throws IOException {
         this.selector = Selector.open();
         this.nodes = nodes;
         this.writableByteChannels = new HashMap<>();
         this.messages = new LinkedBlockingQueue<>();
+
+        ServerSocketChannel chan = ServerSocketChannel.open().bind(listen);
+        chan.configureBlocking(false);
+        chan.register(selector, SelectionKey.OP_ACCEPT);
     }
 
     @Override
@@ -52,7 +56,7 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         return msg;
     }
 
-    public void receiveMessages(final Timer timer) throws IOException {
+    public void receiveMessages(final Timer timer) throws InterruptedException, IOException {
         for (final SelectionKey key : selector.selectedKeys()) {
             if (key.isReadable()) {
                 receiveMessages(
@@ -61,12 +65,14 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
                         (KeySelectionAttachment)key.attachment()
                         );
             }
-
+            else if (key.isAcceptable()) {
+                // FIXME
+            }
         }
     }
 
     public void receiveMessages(final Timer timer, ReadableByteChannel in, KeySelectionAttachment attachment)
-            throws IOException
+            throws IOException, InterruptedException
     {
         if (attachment.header.position() < 8) {
             in.read(attachment.header);
@@ -87,8 +93,9 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
 
         // If we've reached the limit, we're done.
         if (attachment.body.position() == attachment.body.limit()) {
-            // FIXME - decode message.
+            final Message m = jiraffetProtocol.unmarshal(attachment.header, attachment.body);
             attachment.clear();
+            messages.put(m);
         }
     }
 
@@ -98,8 +105,17 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     }
 
     @Override
-    protected WritableByteChannel getOutputStream(String id) {
-        return writableByteChannels.get(id);
+    protected WritableByteChannel getOutputStream(String id) throws IOException {
+
+        final URI uri = URI.create(id);
+        if (writableByteChannels.containsKey(uri)) {
+            return writableByteChannels.get(uri);
+        }
+        else {
+            final SocketChannel chan = SocketChannel.open(new InetSocketAddress(uri.getHost(), uri.getPort()));
+            writableByteChannels.put(uri, chan);
+            return chan;
+        }
     }
 
     @Override
