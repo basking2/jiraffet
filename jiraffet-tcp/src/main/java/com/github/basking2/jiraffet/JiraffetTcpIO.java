@@ -196,7 +196,7 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     private void receiveMessages(final Timer timer, ReadableByteChannel in, KeySelectionAttachment attachment)
             throws IOException, InterruptedException
     {
-        // The in channel is readable becuase it's closed.
+        // The in channel is readable because it's closed.
         if (!in.isOpen()) {
             LOG.debug("Removed closed channel {}", in);
             writableByteChannels.remove(attachment.id);

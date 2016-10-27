@@ -112,6 +112,27 @@ public class Jiraffet
         this.versionVoter = new VersionVoter(io.nodeCount());
     }
 
+    /**
+     * Set the timeout for the leader nodes. This should be somehwat shorter.
+     * 
+     * @see #setFollowerTimeout(long)
+     * 
+     * @param timeout The timeout in milliseconds.
+     */
+    public void setLeaderTimeout(final long timeout) {
+        this.leaderTimeoutMs = timeout;
+    }
+    
+    /**
+     * Set the follower timeout. This should be twice the size of the leader timeout.
+     * 
+     * @see #setLeaderTimeout(long)
+     * 
+     * @param timeout The timeout in milliseconds.
+     */
+    public void setFollowerTimeout(final long timeout) {
+        this.followerTimeoutMs = timeout;
+    }
 
     /**
      * Invoked by leader to replicate log entries; also used as heartbeat.
@@ -284,7 +305,7 @@ public class Jiraffet
                     if (m instanceof RequestVoteResponse) {
                         final RequestVoteResponse req = (RequestVoteResponse) m;
 
-                        // If we are a candiate and got a vote.
+                        // If we are a candidate and got a vote.
                         if (mode == State.CANDIDATE && req.isVoteGranted()){
 
                             votes++;
@@ -460,8 +481,10 @@ public class Jiraffet
         try {
             if (mode != State.CANDIDATE) {
                 mode = State.CANDIDATE;
-                log.setCurrentTerm(log.getCurrentTerm() + 1);
             }
+            
+            // Always increment the current term.
+            log.setCurrentTerm(log.getCurrentTerm() + 1);
 
             // votes = 1, we vote for ourselves.
             votes = 1;
