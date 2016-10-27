@@ -1,22 +1,20 @@
 package com.github.basking2.jiraffet.db;
 
+import java.io.File;
+import java.sql.SQLException;
+
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
-import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.session.SqlSessionManager;
 import org.apache.ibatis.transaction.TransactionFactory;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-
 import org.flywaydb.core.Flyway;
-
-import java.io.File;
-import java.sql.SQLException;
 
 /**
  */
-public class JiraffetDb {
+public class JiraffetDb implements AutoCloseable {
     private static String DBADMIN_USER = "jiraffet_admin";
     private static String DBADMIN_PASS = "";
 
@@ -83,5 +81,12 @@ public class JiraffetDb {
 
     public LogDaoMyBatis getLogDao() {
         return new LogDaoMyBatis(sqlSessionManager);
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (sqlSessionManager.isManagedSessionStarted()) {
+            sqlSessionManager.close();
+        }
     }
 }

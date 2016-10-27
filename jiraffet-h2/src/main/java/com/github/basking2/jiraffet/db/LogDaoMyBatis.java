@@ -1,10 +1,11 @@
 package com.github.basking2.jiraffet.db;
 
-import com.github.basking2.jiraffet.LogDao;
+import java.io.IOException;
+
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionManager;
 
-import java.io.IOException;
+import com.github.basking2.jiraffet.LogDao;
 
 /**
  */

@@ -1,24 +1,44 @@
 package com.github.basking2.jiraffet.db;
 
-import com.github.basking2.jiraffet.LogDao;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.sql.SQLException;
 import java.util.UUID;
 
-import static org.junit.Assert.*;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Ignore;
+import org.junit.Test;
+
+import com.github.basking2.jiraffet.LogDao;
 
 public class LogDaoMyBatisTest {
-    LogDaoMyBatis db;
+    static EphemeralDirectory dir;
+    static JiraffetDb database;
+    static LogDaoMyBatis db;
 
     @Before public void setup() throws SQLException, ClassNotFoundException, IOException {
-       db = new JiraffetDb("test/db").getLogDao();
-
        db.remove(Integer.MIN_VALUE);
+    }
+    
+    @After public void teardown() throws Exception {
+    }
+    
+    @BeforeClass public static void startup() throws IOException, ClassNotFoundException, SQLException {
+        dir = new EphemeralDirectory();
+        database = new JiraffetDb(dir.getTemporaryDirectory().toString());
+        db = database.getLogDao();
+    }
+    @AfterClass public static void cleanup() throws Exception {
+        database.close();
+        //dir.close();
     }
 
     @Test public void testSetCurrentTerm() throws IOException {
