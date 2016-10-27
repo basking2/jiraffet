@@ -18,6 +18,11 @@ public class Timer {
     /**
      * The system clock time when this will be expired.
      */
+    private long systemTime;
+
+    /**
+     * Used to reset this timer.
+     */
     private long timeout;
 
     /**
@@ -47,7 +52,22 @@ public class Timer {
      * @param timeout The duration in milliseconds for this Timer to track.
      */
     public void set(final long timeout) {
-        this.timeout = System.currentTimeMillis() + timeout;
+        this.timeout = timeout;
+        reset();
+    }
+
+    /**
+     * An alias to {@link #reset()}. This starts the timer.
+     */
+    public void set() {
+        reset();
+    }
+
+    /**
+     * Record the system time at which time timer will  have expired, effectively starting the timer.
+     */
+    public void reset() {
+        systemTime = System.currentTimeMillis() + timeout;
     }
 
     /**
@@ -56,7 +76,7 @@ public class Timer {
      * @return The number of milliseconds computed. This value may be negative or 0.
      */
     public long remainingNoThrow() {
-        return timeout - System.currentTimeMillis();
+        return systemTime - System.currentTimeMillis();
     }
 
     /**

@@ -22,6 +22,8 @@ for i in 1 2 3 4 5 ; do
     ./${zipbase/.zip/}/bin/jiraffetdb >& "$d"/jiraffetdb.log &
 
     pids="$pids $!"
+
+    sleep 1
 done
 
 stopall() {

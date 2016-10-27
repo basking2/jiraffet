@@ -17,6 +17,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.LogDao;
 
 public class LogDaoMyBatisTest {
@@ -24,14 +25,14 @@ public class LogDaoMyBatisTest {
     static LogDaoDbManager database;
     static LogDaoMyBatis db;
 
-    @Before public void setup() throws SQLException, ClassNotFoundException, IOException {
+    @Before public void setup() throws SQLException, ClassNotFoundException, JiraffetIOException {
        db.remove(Integer.MIN_VALUE);
     }
     
     @After public void teardown() throws Exception {
     }
     
-    @BeforeClass public static void startup() throws IOException, ClassNotFoundException, SQLException {
+    @BeforeClass public static void startup() throws IOException, JiraffetIOException, ClassNotFoundException, SQLException {
         dir = new EphemeralDirectory();
         database = new LogDaoDbManager(dir.getTemporaryDirectory().toString());
         db = database.getLogDao();
@@ -41,19 +42,19 @@ public class LogDaoMyBatisTest {
         dir.close();
     }
 
-    @Test public void testSetCurrentTerm() throws IOException {
+    @Test public void testSetCurrentTerm() throws JiraffetIOException {
         int term = (int)(Math.random() * Integer.MAX_VALUE);
         db.setCurrentTerm(term);
         assertEquals(term, db.getCurrentTerm());
     }
 
-    @Test public void testSetVotedFor() throws IOException {
+    @Test public void testSetVotedFor() throws JiraffetIOException {
         final String votedFor = UUID.randomUUID().toString();
         db.setVotedFor(votedFor);
         assertEquals(votedFor, db.getVotedFor());
     }
 
-    @Test public void testGetMeta() throws IOException {
+    @Test public void testGetMeta() throws JiraffetIOException {
         LogDao.EntryMeta meta = new LogDao.EntryMeta(
                 (int)(Math.random() * Integer.MAX_VALUE),
                 (int)(Math.random() * Integer.MAX_VALUE));
@@ -77,7 +78,7 @@ public class LogDaoMyBatisTest {
         assertNull(db.getMeta(meta.getIndex()));
     }
     
-    @Test public void testRead() throws IOException {
+    @Test public void testRead() throws JiraffetIOException {
         final byte[] data = new byte[]{ 1, 2, 3, 4 };
         db.write(2, 1, data);
         assertArrayEquals(data, db.read(1));

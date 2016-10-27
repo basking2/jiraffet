@@ -11,46 +11,46 @@ public interface LogDao {
      * Set the current term. This is distinct from the term of the last log entry.
      *
      * @param currentTerm The current term.
-     * @throws IOException On any error.
+     * @throws JiraffetIOException On any error.
      */
-    void setCurrentTerm(int currentTerm) throws IOException;
+    void setCurrentTerm(int currentTerm) throws JiraffetIOException;
 
     /**
      * Get the current term. This is distinct from teh term of the last log entry.
      *
      * @return The current term.
-     * @throws IOException On any error.
+     * @throws JiraffetIOException On any error.
      */
-    int getCurrentTerm() throws IOException;
+    int getCurrentTerm() throws JiraffetIOException;
 
     /**
      * Set who we voted for.
      *
      * @param id The id of who we voted for.
-     * @throws IOException On any error.
+     * @throws JiraffetIOException On any error.
      */
-    void setVotedFor(String id) throws IOException;
+    void setVotedFor(String id) throws JiraffetIOException;
 
     /**
      * @return Who we voted for. This should be reset when a new leader establishes themselves / the term changes.
-     * @throws IOException On any error.
+     * @throws JiraffetIOException On any error.
      */
-    String getVotedFor() throws IOException;
+    String getVotedFor() throws JiraffetIOException;
 
-    EntryMeta getMeta(int index) throws IOException;
+    EntryMeta getMeta(int index) throws JiraffetIOException;
 
-    byte[] read(int index) throws IOException;
+    byte[] read(int index) throws JiraffetIOException;
 
-    boolean hasEntry(int index, int term) throws IOException;
+    boolean hasEntry(int index, int term) throws JiraffetIOException;
 
-    void write(int term, int index, byte[] data) throws IOException;
+    void write(int term, int index, byte[] data) throws JiraffetIOException;
 
     /**
      * Remove this index, and all following entries.
      * @param i item index.
-     * @throws IOException on any IO error.
+     * @throws JiraffetIOException on any IO error.
      */
-    void remove(int i) throws IOException;
+    void remove(int i) throws JiraffetIOException;
 
     /**
      * Apply the given index to an internal state machine.
@@ -63,10 +63,10 @@ public interface LogDao {
     /**
      * Return the term of the last entry in the log.
      *
-     * @throws IOException On any IO error.
+     * @throws JiraffetIOException On any IO error.
      * @return The metadata for the last entry in the log. This should never be null.
      */
-    EntryMeta last() throws IOException;
+    EntryMeta last() throws JiraffetIOException;
 
     class EntryMeta {
         private int term;

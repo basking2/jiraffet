@@ -1,9 +1,9 @@
 package com.github.basking2.jiraffet.db;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.github.basking2.jiraffet.JiraffetIOException;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionManager;
 import org.slf4j.Logger;
@@ -27,7 +27,7 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public void setCurrentTerm(int currentTerm) throws IOException {
+    public void setCurrentTerm(int currentTerm) throws JiraffetIOException {
         LOG.info("Setting current term to {}", currentTerm);
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
@@ -37,7 +37,7 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public int getCurrentTerm() throws IOException {
+    public int getCurrentTerm() throws JiraffetIOException {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
             return mapper.getCurrentTerm();
@@ -45,7 +45,7 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public void setVotedFor(final String id) throws IOException {
+    public void setVotedFor(final String id) throws JiraffetIOException {
         LOG.info("Setting voted for to {}", id);
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
@@ -55,7 +55,7 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public String getVotedFor() throws IOException {
+    public String getVotedFor() throws JiraffetIOException {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
             return mapper.getVotedFor();
@@ -63,15 +63,21 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public EntryMeta getMeta(int index) throws IOException {
+    public EntryMeta getMeta(int index) throws JiraffetIOException {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
-            return mapper.getMeta(index);
+            final EntryMeta meta = mapper.getMeta(index);
+            if (meta == null) {
+                return new EntryMeta(0, 0);
+            }
+            else {
+                return meta;
+            }
         }
     }
 
     @Override
-    public byte[] read(int index) throws IOException {
+    public byte[] read(int index) throws JiraffetIOException {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
             final List<byte[]> result = mapper.read(index);
@@ -86,15 +92,15 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public boolean hasEntry(int index, int term) throws IOException {
+    public boolean hasEntry(int index, int term) throws JiraffetIOException {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
-            return mapper.hasEntry(index, term) != 0;
+            return (mapper.hasEntry(index, term) != 0) || (index == 0 && term == 0);
         }
     }
 
     @Override
-    public void write(int term, int index, byte[] data) throws IOException {
+    public void write(int term, int index, byte[] data) throws JiraffetIOException {
         LOG.info("Wrinting entry term/index {}/{}", term, index);
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
@@ -104,7 +110,7 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public void remove(int i) throws IOException {
+    public void remove(int i) throws JiraffetIOException {
         LOG.info("Removing index and all following {}.", i);
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
@@ -142,7 +148,7 @@ public class LogDaoMyBatis implements LogDao {
     }
 
     @Override
-    public EntryMeta last() throws IOException {
+    public EntryMeta last() throws JiraffetIOException {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final LogMapper mapper = session.getMapper(LogMapper.class);
             final EntryMeta meta = mapper.last();
