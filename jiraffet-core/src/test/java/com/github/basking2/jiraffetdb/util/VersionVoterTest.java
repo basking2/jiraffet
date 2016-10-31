@@ -1,4 +1,4 @@
-package com.github.basking2.jiraffet.util;
+package com.github.basking2.jiraffetdb.util;
 
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;

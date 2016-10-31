@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'application'
 apply plugin: 'org.asciidoctor.convert'
 
-mainClassName = 'com.github.basking2.jiraffet.JiraffetDbMain'
+mainClassName = 'com.github.basking2.jiraffetdb.JiraffetDbMain'
 applicationDefaultJvmArgs=[]
 
 // group = defined by parent.

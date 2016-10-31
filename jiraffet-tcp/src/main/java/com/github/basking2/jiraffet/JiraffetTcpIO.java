@@ -1,7 +1,7 @@
 package com.github.basking2.jiraffet;
 
 import com.github.basking2.jiraffet.messages.*;
-import com.github.basking2.jiraffet.util.Timer;
+import com.github.basking2.jiraffetdb.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

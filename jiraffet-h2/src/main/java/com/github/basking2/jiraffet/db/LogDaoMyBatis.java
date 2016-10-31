@@ -26,6 +26,10 @@ public class LogDaoMyBatis implements LogDao {
         this.appliers = new ArrayList<Applier>();
     }
 
+    public void addApplier(final Applier applier) {
+        appliers.add(applier);
+    }
+
     @Override
     public void setCurrentTerm(int currentTerm) throws JiraffetIOException {
         LOG.info("Setting current term to {}", currentTerm);

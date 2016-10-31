@@ -1,7 +1,5 @@
 package com.github.basking2.jiraffet;
 
-import java.io.IOException;
-
 /**
  * The Raft Log entry.
  */

@@ -1,11 +1,9 @@
 package com.github.basking2.jiraffet;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -19,8 +17,8 @@ import com.github.basking2.jiraffet.messages.ClientRequest;
 import com.github.basking2.jiraffet.messages.Message;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
-import com.github.basking2.jiraffet.util.Timer;
-import com.github.basking2.jiraffet.util.VersionVoter;
+import com.github.basking2.jiraffetdb.util.Timer;
+import com.github.basking2.jiraffetdb.util.VersionVoter;
 
 /**
  * An instance of the Raft algorithm.

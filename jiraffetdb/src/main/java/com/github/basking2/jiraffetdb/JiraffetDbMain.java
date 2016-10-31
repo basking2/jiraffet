@@ -1,4 +1,4 @@
-package com.github.basking2.jiraffet;
+package com.github.basking2.jiraffetdb;
 
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;

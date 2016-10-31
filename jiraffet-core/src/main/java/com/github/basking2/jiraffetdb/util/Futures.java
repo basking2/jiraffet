@@ -1,4 +1,4 @@
-package com.github.basking2.jiraffet.util;
+package com.github.basking2.jiraffetdb.util;
 
 import java.util.List;
 import java.util.concurrent.CancellationException;
