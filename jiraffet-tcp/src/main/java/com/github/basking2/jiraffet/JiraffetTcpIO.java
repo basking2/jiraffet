@@ -2,6 +2,7 @@ package com.github.basking2.jiraffet;
 
 import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.jiraffetdb.util.Timer;
+import com.github.basking2.sdsai.net.AppTcpPool;
 import com.github.basking2.sdsai.net.TcpPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,19 +41,6 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         this.messages = new LinkedBlockingQueue<>();
         this.nodeId = listen;
 
-        final TcpPool.IdTranslator idTranslator = new TcpPool.IdTranslator() {
-            @Override
-            public SocketAddress translate(String id) {
-                final URI uri = URI.create(id);
-
-                if (!uri.getScheme().equals("jiraffet")) {
-                    throw new IllegalArgumentException("Scheme must be \"jiraffet\".");
-                }
-
-                return new InetSocketAddress(uri.getHost(), uri.getPort());
-            }
-        };
-
         final TcpPool.SocketHandler socketHandler = new TcpPool.SocketHandler() {
             @Override
             public void handleNewSocket(final String id, final SocketChannel socketChannel)
@@ -82,7 +70,7 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
             }
         };
 
-        this.tcpPool = new TcpPool(nodeId, idTranslator, socketHandler);
+        this.tcpPool = new AppTcpPool(nodeId, "jiraffet", socketHandler);
     }
 
     /**
