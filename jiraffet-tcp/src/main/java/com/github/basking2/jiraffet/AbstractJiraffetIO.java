@@ -2,8 +2,11 @@ package com.github.basking2.jiraffet;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -40,7 +43,6 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
         bb.position(0);
 
         for (final String node : nodes()) {
-            final WritableByteChannel out = getOutputStream(node);
             write(node, "send RequestVoteRequest", bb.slice());
         }
 
@@ -97,7 +99,7 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
      * @return
      * @throws JiraffetIOException
      */
-    protected abstract WritableByteChannel getOutputStream(String id) throws JiraffetIOException;
+    protected abstract Future<SocketChannel> getOutputStream(String id) throws JiraffetIOException;
 
     /**
      * Handle cases where writing fails.
@@ -118,22 +120,33 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
      */
     private void write(final String nodeId, final String action, final ByteBuffer bb) throws JiraffetIOException {
         LOG.debug("{} to {}, len {}", action, nodeId, bb.limit());
-        final WritableByteChannel chan = getOutputStream(nodeId);
-        if (chan == null) {
+        final Future<SocketChannel> chanFuture = getOutputStream(nodeId);
+        if (chanFuture == null) {
+            return;
+        }
+
+        if (!chanFuture.isDone()) {
             return;
         }
 
         try {
-            while (bb.position() < bb.limit()) {
-                final int i = chan.write(bb);
-                LOG.debug("Wrote {} bytes from this node to {}", i, nodeId);
-                if (i == -1) {
-                    throw new IOException(("End of stream."));
+            final WritableByteChannel chan = chanFuture.get();
+            try {
+                while (bb.position() < bb.limit()) {
+                    final int i = chan.write(bb);
+                    LOG.debug("Wrote {} bytes from this node to {}", i, nodeId);
+                    if (i == -1) {
+                        throw new IOException(("End of stream."));
+                    }
                 }
+            } catch (final IOException e) {
+                handleException(nodeId, action, chan, e);
             }
         }
-        catch (final IOException e) {
-            handleException(nodeId, action, chan, e);
+        catch (InterruptedException e) {
+            return;
+        } catch (ExecutionException e) {
+            return;
         }
     }
 }
