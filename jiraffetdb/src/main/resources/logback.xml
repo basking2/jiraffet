@@ -9,8 +9,10 @@
         <target>System.err</target>
     </appender>
 
-    <logger name="com.github.basking2.jiraffet.db.LogMapper" level="info" />
     <logger name="org.apache.ibatis" level="info" />
+    <logger name="com.github.basking2.jiraffet.db.LogMapper" level="info" />
+    <logger name="com.github.basking2.jiraffet.AbstractJiraffetIO" level="warn" />
+    <logger name="com.github.basking2.jiraffet.JiraffetTcpIO" level="warn" />
 
     <!-- turn OFF all logging (children can override) -->
     <root level="DEBUG">

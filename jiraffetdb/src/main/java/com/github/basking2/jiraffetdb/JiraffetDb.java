@@ -83,7 +83,7 @@ public class JiraffetDb {
         try {
             Jiraffet jiraffet = new Jiraffet(io.getNodeId(), log, io);
 
-            jiraffet.setLeaderTimeout(3000);
+            jiraffet.setLeaderTimeout(2000);
             jiraffet.setFollowerTimeout(5000);
 
             LOG.debug("Starting node {}.", io.getNodeId());

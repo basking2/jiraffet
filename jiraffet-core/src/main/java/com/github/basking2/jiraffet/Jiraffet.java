@@ -103,7 +103,7 @@ public class Jiraffet
         this.commitIndex = 0;
         this.lastApplied = 0;
         this.leaderTimeoutMs = 5000;
-        this.followerTimeoutMs = 2 * this.leaderTimeoutMs;
+        this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
         this.nextIndex = new HashMap<>();
         this.running = false;
         this.receiveTimer = new Timer(followerTimeoutMs);
@@ -520,7 +520,7 @@ public class Jiraffet
             final EntryMeta lastLog = log.last();
             
             // If the candidate asking for our vote has logs in the future, we will vote for them.
-            if (req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
+            if (log.getVotedFor() == null || req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
                 LOG.debug("Voting for {} term {}.", req.getCandidateId(), req.getTerm());
                 // If we get here, well, vote!
                 io.requestVotes(candidateId, req.vote());

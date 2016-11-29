@@ -93,13 +93,15 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
     public abstract List<String> nodes();
 
     /**
-     * Given an ID, convert it to a connected, writable byte channel.
+     * Given an ID, convert it to a connected, writable byte channel and schedule the buffers to be sent.
+     *
+     * If the buffers cannot all be schedule to be sent, then all of them are silently dropped.
      *
      * @param id
-     * @return
+     * @param segments The segments to all send or drop.
      * @throws JiraffetIOException
      */
-    protected abstract Future<SocketChannel> getOutputStream(String id) throws JiraffetIOException;
+    protected abstract void write(String id, ByteBuffer ... segments) throws JiraffetIOException;
 
     /**
      * Handle cases where writing fails.
@@ -120,33 +122,7 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
      */
     private void write(final String nodeId, final String action, final ByteBuffer bb) throws JiraffetIOException {
         LOG.debug("{} to {}, len {}", action, nodeId, bb.limit());
-        final Future<SocketChannel> chanFuture = getOutputStream(nodeId);
-        if (chanFuture == null) {
-            return;
-        }
 
-        if (!chanFuture.isDone()) {
-            return;
-        }
-
-        try {
-            final WritableByteChannel chan = chanFuture.get();
-            try {
-                while (bb.position() < bb.limit()) {
-                    final int i = chan.write(bb);
-                    LOG.debug("Wrote {} bytes from this node to {}", i, nodeId);
-                    if (i == -1) {
-                        throw new IOException(("End of stream."));
-                    }
-                }
-            } catch (final IOException e) {
-                handleException(nodeId, action, chan, e);
-            }
-        }
-        catch (InterruptedException e) {
-            return;
-        } catch (ExecutionException e) {
-            return;
-        }
+        write(nodeId, bb);
     }
 }
