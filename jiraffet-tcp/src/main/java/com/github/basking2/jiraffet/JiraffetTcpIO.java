@@ -25,7 +25,7 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetTcpIO.class);
     final private Selector selector;
     final private List<String> nodes;
-    final private Map<String, SocketChannel> writableByteChannels;
+    final private Map<String, TcpPool.UserKeyAttachment> writableByteChannels;
     final private LinkedBlockingQueue<Message> messages;
     final private String nodeId;
     final private TcpPool tcpPool;
@@ -45,36 +45,7 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         this.messages = new LinkedBlockingQueue<>();
         this.nodeId = listen;
 
-        final TcpPool.SocketHandler socketHandler = new TcpPool.SocketHandler() {
-            @Override
-            public void handleNewSocket(final String id, final SocketChannel socketChannel)
-            {
-                final WritableByteChannel wbc = writableByteChannels.put(id, socketChannel);
-                LOG.info("Registering {}. Curr {}, Prev {}", id, socketChannel, wbc);
-                if (wbc == socketChannel) {
-                    LOG.warn("Socked re-added to live list. Internal logic error?");
-                }
-                else if (wbc != null) {
-                    try {
-                        LOG.warn("Evicting previous socket for {}", id);
-                        wbc.close();
-                    }
-                    catch (final IOException e) {
-                        LOG.warn("Closing old socket {}.", id, e);
-                    }
-                }
-
-
-                try {
-                    socketChannel.register(selector, SelectionKey.OP_READ, new KeySelectionAttachment(id));
-                } catch (ClosedChannelException e) {
-                    LOG.warn("Socket closed while registering. {}.", id, e);
-                }
-
-            }
-        };
-
-        this.tcpPool = new AppTcpPool(nodeId, "jiraffet", socketHandler);
+        this.tcpPool = new AppTcpPool(nodeId, "jiraffet", new JiraffetDataHandlerProvider());
     }
 
     /**
@@ -87,31 +58,17 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         final List<Message> msg = new ArrayList<>(messages.size());
 
         try {
-            tcpPool.runOnceNow();
+            while (messages.size() == 0) {
+                tcpPool.runOnce(timer.remaining());
+            }
         } catch (final IOException e) {
             throw new JiraffetIOException(e);
         }
 
-        final int numReady;
-        try {
-            numReady = selector.select(timer.remaining());
-            LOG.debug("Sockets ready: {}", numReady);
-        }
-        catch (final IOException e) {
-            LOG.error("FATAL", e);
-            throw new JiraffetIOException(e);
-        }
+        // Ensure we have at least 1 message, and throw an exception if we don't.
+        msg.add(messages.remove());
 
-        if (numReady > 0) {
-            selectSockets(timer);
-        }
-
-        final Message firstMessage = messages.poll(timer.remaining(), Timer.TIME_UNIT);
-        if (firstMessage == null) {
-            throw new TimeoutException("Waiting for messages.");
-        }
-
-        msg.add(firstMessage);
+        // Get any remaining messages.
         messages.drainTo(msg);
 
         if (LOG.isDebugEnabled()) {
@@ -122,177 +79,6 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         }
 
         return msg;
-    }
-
-    /**
-     * Called by {@link #getMessages(long, TimeUnit)} with a {@link Timer} to limit the waiting and work done.
-     *
-     * @param timer Timer to limit the work and waiting.
-     * @throws InterruptedException On thread interruption.
-     * @throws JiraffetIOException On an error that will stop any future progress.
-     */
-    private void selectSockets(final Timer timer) throws InterruptedException, JiraffetIOException {
-
-        final Set<SelectionKey> selectionKeys = selector.selectedKeys();
-
-        for (
-                final Iterator<SelectionKey> itr = selectionKeys.iterator();
-                itr.hasNext();
-        )
-        {
-            final SelectionKey key = itr.next();
-            final KeySelectionAttachment keySelectionAttachment = (KeySelectionAttachment)key.attachment();
-            try {
-                if (!key.isValid()) {
-                    // This occurs when 1) a key is selected, 2) the remote host closes it.
-                    LOG.debug("Ignoring invalid key.");
-                    key.cancel();
-                    continue;
-                }
-
-                if (!key.channel().isOpen()) {
-                    LOG.info("Channel is closed to {}", keySelectionAttachment.id);
-                    key.cancel();
-                    continue;
-                }
-
-                if (key.isReadable()) {
-                    LOG.debug("Reading from {}", key);
-                    receiveMessages(
-                            timer,
-                            (ReadableByteChannel) key.channel(),
-                            (KeySelectionAttachment) key.attachment()
-                    );
-                }
-
-                if (key.isWritable()) {
-                    final KeySelectionAttachment attachment = (KeySelectionAttachment) key.attachment();
-                    if (attachment.sendList.size() == 0) {
-                        // We managed to send everything!
-                        // Re-register to only get READ events.
-                        key.interestOps(SelectionKey.OP_READ);
-                    }
-                    else {
-                        LOG.debug("Writing to {}", attachment.id);
-
-                        sendMessages(
-                                timer,
-                                (WritableByteChannel) key.channel(),
-                                attachment
-                        );
-                    }
-                }
-            }
-            catch (final IOException e) {
-                LOG.debug("ID: {}", keySelectionAttachment.id);
-                LOG.debug("Channel: {}", key.channel());
-                handleException(keySelectionAttachment.id, "receiving data", (SocketChannel)key.channel(), e);
-            }
-            finally {
-                // Remove handled key from the selection set.
-                itr.remove();
-            }
-        }
-    }
-
-    /**
-     * @param timer How long may this spend waiting for data.
-     * @param out Input channel.
-     * @param attachment How to store state about the channel.
-     * @throws IOException On any fatal IO error.
-     * @throws InterruptedException On thread interruption.
-     */
-    private void sendMessages(final Timer timer, WritableByteChannel out, KeySelectionAttachment attachment)
-            throws IOException, InterruptedException
-    {
-        // The in channel is readable because it's closed.
-        if (!out.isOpen()) {
-            LOG.debug("Removed closed channel {}", out);
-            writableByteChannels.remove(attachment.id);
-            return;
-        }
-
-        // While we have data to send and time remaining.
-        while (attachment.sendList.size() > 0 && timer.remainingNoThrow() > 0) {
-
-            // Get the front of the buffer.
-            final ByteBuffer sendMe = attachment.sendList.peek();
-
-            // Do a send.
-            int sent = out.write(sendMe);
-            if (sent < 0) {
-                // Error!?
-                writableByteChannels.remove(attachment.id);
-                out.close();
-                break;
-            }
-
-            if (sendMe.position() >= sendMe.limit()) {
-                attachment.sendList.poll();
-            }
-        }
-    }
-
-    /**
-     * @param timer How long may this spend waiting for data.
-     * @param in Input channel.
-     * @param attachment How to store state about the channel.
-     * @throws IOException On any fatal IO error.
-     * @throws InterruptedException On thread interruption.
-     */
-    private void receiveMessages(final Timer timer, ReadableByteChannel in, KeySelectionAttachment attachment)
-            throws IOException, InterruptedException
-    {
-        // The in channel is readable because it's closed.
-        if (!in.isOpen()) {
-            LOG.debug("Removed closed channel {}", in);
-            writableByteChannels.remove(attachment.id);
-            return;
-        }
-
-        // If there is room for header data, receive it.
-        if (attachment.body == null && attachment.header.position() < 8) {
-            final int i = in.read(attachment.header);
-
-            // Fail on end-of-stream.
-            if (i == -1) {
-                throw new IOException("End of stream, header.");
-            }
-
-            // If we still don't have the header, leave.
-            if (attachment.header.position() < 8) {
-                return;
-            }
-        }
-
-        // If we are here and have no body yet, create one. We have the length.
-        if (attachment.body == null) {
-            // This can be larger than len if the limit is set.
-            attachment.body = ByteBuffer.allocate(attachment.getLen()-8);
-            // attachment.body.limit(attachment.getLen());
-        }
-
-        final int i = in.read(attachment.body);
-        if (i == -1) {
-            throw new IOException("End of stream, body.");
-        }
-
-        // If we've reached the limit, we're done.
-        if (attachment.body.position() == attachment.body.limit()) {
-            final Message m;
-            try {
-                m = jiraffetProtocol.unmarshal(attachment.header, attachment.body);
-            }
-            catch (final IllegalArgumentException e) {
-                throw new IOException("Decoding received message", e);
-            }
-            attachment.clear();
-
-            if (m == null) {
-                throw new RuntimeException("Trying to enqueue a NULL message.");
-            }
-            messages.put(m);
-        }
     }
 
     @Override
@@ -307,49 +93,20 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         }
 
         if (writableByteChannels.containsKey(id)) {
-            final SocketChannel wbc = writableByteChannels.get(id);
-
-            if (wbc.isOpen()) {
-                final SelectionKey selectionKey = wbc.keyFor(selector);
-                if (selectionKey != null) {
-                    final KeySelectionAttachment keySelectionAttachment = (KeySelectionAttachment)selectionKey.attachment();
-                    if (keySelectionAttachment != null) {
-                        write(keySelectionAttachment, selectionKey, segments);
-                    }
-                }
-                return;
-            }
-
-            LOG.error("Connection is not open. Rebuilding it.");
+            final TcpPool.UserKeyAttachment wbc = writableByteChannels.get(id);
+            wbc.write(segments);
         }
-
-        try {
+        else {
             LOG.info("Opening new connection to {}", id);
 
-            tcpPool.connect(id);
-        }
-        catch (final IOException e) {
-            LOG.error("Failed connecting from {} to {}.", nodeId, id, e);
-            writableByteChannels.remove(id);
-        }
-    }
-
-    protected void write(
-            final KeySelectionAttachment keySelectionAttachment,
-            final SelectionKey selectionKey,
-            final ByteBuffer ... segments
-    ) throws JiraffetIOException {
-        if (keySelectionAttachment.sendList.size() + segments.length > 1000) {
-            LOG.error("Send queue limit exceeded. Dropping messages to node "+keySelectionAttachment.id);
-        }
-
-        for (final ByteBuffer segment : segments) {
-            keySelectionAttachment.sendList.add(segment);
-        }
-
-        // Enable READ select if we added to an empty list.
-        if (segments.length == keySelectionAttachment.sendList.size()) {
-            selectionKey.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+            try {
+                final TcpPool.UserKeyAttachment wbc = tcpPool.connect(id);
+                wbc.write(segments);
+            }
+            catch (final IOException e) {
+                LOG.error("Failed connecting from {} to {}.", nodeId, id, e);
+                writableByteChannels.remove(id);
+            }
         }
     }
 
@@ -386,52 +143,6 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
         selector.close();
     }
 
-    public static class KeySelectionAttachment {
-
-        public String id;
-
-        /**
-         * Header described by {@link JiraffetProtocol#unmarshal(ByteBuffer, ByteBuffer)}.
-         */
-        public ByteBuffer header;
-
-        /**
-         * Body described by {@link JiraffetProtocol#unmarshal(ByteBuffer, ByteBuffer)}.
-         */
-        public ByteBuffer body;
-
-        public int getLen() {
-            return header.getInt(0);
-        }
-
-        /**
-         * List of buffers to send as soon as possible.
-         */
-        public ConcurrentLinkedQueue<ByteBuffer> sendList;
-
-        /**
-         * Clear the receiving message state.
-         *
-         * This is done when a message is fully received.
-         *
-         * The sending queue is never cleared.
-         */
-        public void clear() {
-            header.putInt(0, 0);
-            header.putInt(0, 4);
-            header.position(0);
-            header.limit(8);
-            body = null;
-        }
-
-        public KeySelectionAttachment(final String id) {
-            this.id = id;
-            this.header = ByteBuffer.allocate(8);
-            this.body = null;
-            this.sendList = new ConcurrentLinkedQueue<>();
-        }
-    }
-
     @Override
     public void clientRequest(final List<ClientRequest> clientRequests) {
         for (final ClientRequest clientRequest : clientRequests) {
@@ -445,5 +156,113 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
 
     public String getNodeId() {
         return this.nodeId;
+    }
+
+    private class JiraffetDataHandlerProvider implements TcpPool.DataHandlerProvider {
+
+        @Override
+        public TcpPool.DataHandler getDataHandler(String id) {
+            return new JiraffetDataHandler();
+        }
+    }
+
+    private class JiraffetDataHandler implements TcpPool.DataHandler {
+
+        private ByteBuffer header = null;
+        private ByteBuffer body = null;
+
+        @Override
+        public void handleOpen(String id) {
+            header = ByteBuffer.allocate(8);
+            body = null;
+        }
+
+        @Override
+        public void handleData(final String id, final SocketChannel chan) throws IOException {
+            receiveMessages(id, chan);
+        }
+
+        @Override
+        public void handleClose(String id) {
+            // Make sure we're gone.
+            writableByteChannels.remove(id);
+        }
+
+        private void receiveMessages(final String id, SocketChannel in) throws IOException
+        {
+            // The in channel is readable because it's closed.
+            if (!in.isOpen()) {
+                LOG.debug("Removed closed channel {}", in);
+                writableByteChannels.remove(id);
+                return;
+            }
+
+            // If there is room for header data, receive it.
+            if (body == null && header.position() < 8) {
+                final int i = in.read(header);
+
+                // Fail on end-of-stream.
+                if (i == -1) {
+                    throw new IOException("End of stream, header.");
+                }
+
+                // If we still don't have the header, leave.
+                if (header.position() < 8) {
+                    return;
+                }
+            }
+
+            // If we are here and have no body yet, create one. We have the length.
+            if (body == null) {
+                // This can be larger than len if the limit is set.
+                body = ByteBuffer.allocate(getLen()-8);
+                // body.limit(attachment.getLen());
+            }
+
+            final int i = in.read(body);
+            if (i == -1) {
+                throw new IOException("End of stream, body.");
+            }
+
+            // If we've reached the limit, we're done.
+            if (body.position() == body.limit()) {
+                final Message m;
+
+                try {
+                    m = jiraffetProtocol.unmarshal(header, body);
+                }
+                catch (final IllegalArgumentException e) {
+                    throw new IOException("Decoding received message", e);
+                }
+                finally {
+                    clear();
+                }
+
+                if (m == null) {
+                    throw new RuntimeException("Trying to enqueue a NULL message.");
+                }
+
+                try {
+                    messages.put(m);
+                }
+                catch (final InterruptedException e) {
+                    throw new RuntimeException("Unexpected error enqueing message.", e);
+                }
+            }
+        }
+
+        /**
+         * Set body to null and clear the header.
+         */
+        private void clear() {
+            header.putInt(0, 0);
+            header.putInt(4, 0);
+            header.clear();
+            body = null;
+        }
+
+        public int getLen() {
+            return header.getInt(0);
+        }
     }
 }

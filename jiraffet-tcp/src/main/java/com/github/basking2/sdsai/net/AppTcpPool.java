@@ -9,7 +9,11 @@ import java.net.URI;
  * A {@link TcpPool} that connects with an app prefix.
  */
 public class AppTcpPool extends TcpPool {
-    public AppTcpPool(final String listening, final String schema, TcpPool.SocketHandler ... socketHandlers) throws IOException {
+    public AppTcpPool(
+            final String listening,
+            final String schema,
+            final DataHandlerProvider dataHandlerProvider
+    ) throws IOException {
         super(
                 listening,
                 id -> {
@@ -21,7 +25,7 @@ public class AppTcpPool extends TcpPool {
 
                     return new InetSocketAddress(uri.getHost(), uri.getPort());
                 },
-                socketHandlers
+                dataHandlerProvider
         );
     }
 }
