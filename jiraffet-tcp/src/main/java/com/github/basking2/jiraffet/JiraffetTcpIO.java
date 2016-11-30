@@ -203,6 +203,8 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
 
                 // Fail on end-of-stream.
                 if (i == -1) {
+                    writableByteChannels.remove(id);
+                    in.close();
                     throw new IOException("End of stream, header.");
                 }
 
@@ -221,6 +223,8 @@ public class JiraffetTcpIO extends AbstractJiraffetIO implements AutoCloseable {
 
             final int i = in.read(body);
             if (i == -1) {
+                writableByteChannels.remove(id);
+                in.close();
                 throw new IOException("End of stream, body.");
             }
 
