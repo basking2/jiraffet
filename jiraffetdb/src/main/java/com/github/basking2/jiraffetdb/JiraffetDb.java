@@ -4,20 +4,20 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
 
-import com.github.basking2.jiraffet.Jiraffet;
-import com.github.basking2.jiraffet.JiraffetTcpIO;
-import com.github.basking2.jiraffet.JiraffetTcpIOFactory;
-import com.github.basking2.jiraffetdb.dao.DbManager;
-import com.github.basking2.jiraffetdb.dao.KeyValueDao;
-import com.github.basking2.jiraffet.db.LogDaoMyBatis;
-import com.github.basking2.jiraffetdb.util.KeyValueProtocol;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetTcpIO;
+import com.github.basking2.jiraffet.JiraffetTcpIOFactory;
 import com.github.basking2.jiraffet.db.LogDaoDbManager;
+import com.github.basking2.jiraffet.db.LogDaoMyBatis;
+import com.github.basking2.jiraffetdb.dao.DbManager;
+import com.github.basking2.jiraffetdb.dao.KeyValueDao;
 import com.github.basking2.jiraffetdb.util.App;
+import com.github.basking2.jiraffetdb.util.KeyValueProtocol;
 
 /**
  * How to configure the TCP app.

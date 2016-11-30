@@ -1,14 +1,16 @@
 package com.github.basking2.jiraffetdb.util;
 
-import org.apache.commons.configuration2.*;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.configuration2.CompositeConfiguration;
+import org.apache.commons.configuration2.Configuration;
+import org.apache.commons.configuration2.SystemConfiguration;
 import org.apache.commons.configuration2.builder.fluent.Configurations;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A class to capture the notion of an application.

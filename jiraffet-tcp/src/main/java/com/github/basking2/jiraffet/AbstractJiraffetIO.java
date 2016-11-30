@@ -2,21 +2,19 @@ package com.github.basking2.jiraffet;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
 import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
 import com.github.basking2.jiraffet.messages.Message;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 /**
@@ -97,17 +95,19 @@ public abstract class AbstractJiraffetIO implements JiraffetIO {
      *
      * If the buffers cannot all be schedule to be sent, then all of them are silently dropped.
      *
-     * @param id
+     * @param id The node id to send the segments to.
      * @param segments The segments to all send or drop.
-     * @throws JiraffetIOException
+     * @throws JiraffetIOException on an error.
      */
     protected abstract void write(String id, ByteBuffer ... segments) throws JiraffetIOException;
 
     /**
      * Handle cases where writing fails.
      *
-     * @param out The output stream we failed to write to.
-     * @param e The precise exception given.
+     * @param nodeId The node id.
+     * @param action The intended action.
+     * @param out Where to send data to.
+     * @param e The exception causing the failure.
      * @throws JiraffetIOException If this should be fatal to the node.
      */
     protected abstract void handleException(String nodeId, String action, WritableByteChannel out, IOException e) throws JiraffetIOException;
