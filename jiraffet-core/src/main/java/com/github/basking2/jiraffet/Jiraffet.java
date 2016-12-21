@@ -20,6 +20,8 @@ import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 import com.github.basking2.jiraffetdb.util.Timer;
 import com.github.basking2.jiraffetdb.util.VersionVoter;
 
+import static java.util.Arrays.asList;
+
 /**
  * An instance of the Raft algorithm.
  */
@@ -532,16 +534,12 @@ public class Jiraffet
         }
     }
 
-    public LogDao getLog() {
-        return log;
+    /**
+     * Return the nodeId of the node that we believe is the current leader.
+     *
+     * @return the nodeId of the node that we believe is the current leader.
+     */
+    public String getCurrentLeader() {
+        return currentLeader;
     }
-
-    public void setLog(LogDao log) {
-        this.log = log;
-    }
-
-    public JiraffetIO getIo() {
-        return io;
-    }
-
 }

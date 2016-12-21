@@ -1,6 +1,5 @@
 package com.github.basking2.sdsai.net;
 
-import org.apache.ibatis.annotations.Select;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,7 +10,6 @@ import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Future;
 
 /**
  * This class is not completely thread safe as it manipulates a selector's key sets.
@@ -46,7 +44,7 @@ public class TcpPool implements AutoCloseable {
             final String listen,
             final IdTranslator idTranslator,
             final DataHandlerProvider dataHandlerProvider
-    ) throws IOException {
+            ) throws IOException {
         this.idTranslator = idTranslator;
         this.dataHandlerProvider = dataHandlerProvider;
         this.nodeId = listen;
@@ -245,6 +243,16 @@ public class TcpPool implements AutoCloseable {
         selector.close();
     }
 
+    /**
+     * This is the primary way to programatically interface with {@link TcpPool}.
+     *
+     * Calling connect will search the known hosts for the given id. If it is found, it is returned.
+     * If it is not found, a record is created and an attempt is made to connect to the server.
+     *
+     * @param id The connection id which is translatable using the given {@link IdTranslator} to an address.
+     * @return An object to proxy and buffer communications to the object.
+     * @throws IOException On any IO Error.
+     */
     public UserKeyAttachment connect(final String id) throws IOException {
         if (id.equals(nodeId)) {
             throw new IOException("Node may not connect to itself: "+id);

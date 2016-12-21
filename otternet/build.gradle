@@ -1,0 +1,101 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'signing'
+apply plugin: 'application'
+apply plugin: 'org.asciidoctor.convert'
+
+mainClassName = 'com.github.basking2.otternet.OtterNet'
+description = """May otters are a raft. This is a multiplexed group of raft instances using Jiraffet."""
+applicationDefaultJvmArgs = []
+
+// group = defined by parent.
+// archiveBaseName = defined by parent and project name.
+// version = defined by parent.
+
+compileJava {
+    options.compilerArgs << '-Xlint:unchecked'
+}
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+dependencies {
+    compile 'ch.qos.logback:logback-classic:1.1.7'
+    compile project(':jiraffet-tcp')
+    compile project(':jiraffet-h2')
+
+    //compile 'org.apache.commons:commons-compress:1.11'
+    compile 'commons-io:commons-io:2.5'
+
+    //compile 'org.tukaani:xz:1.5'
+    compile 'commons-beanutils:commons-beanutils:1.9.3'
+    compile 'org.apache.commons:commons-configuration2:2.1'
+    //compile 'com.google.guava:guava:19.0'
+
+    testCompile 'junit:junit:4.12'
+}
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+if (project.hasProperty('ossrhUsername') && project.hasProperty('ossrhPassword')) {
+    signing {
+        sign configurations.archives
+    }
+
+    uploadArchives {
+        repositories {
+            mavenDeployer {
+                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+                repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                    authentication(userName: ossrhUsername, password: ossrhPassword)
+                }
+
+                snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                    authentication(userName: ossrhUsername, password: ossrhPassword)
+                }
+
+                pom.project {
+                    packaging 'jar'
+                    // optionally artifactId can be defined here
+                    url 'https://github.com/basking2/jiraffet'
+
+                    scm {
+                        connection 'scm:git:git@github.com:basking2/jiraffet.git'
+                        developerConnection 'git@github.com:basking2/jiraffet.git'
+                        url 'https://github.com/basking2/jiraffet.git'
+                    }
+
+                    licenses {
+                        license {
+                            name 'MIT'
+                            url 'https://opensource.org/licenses/MIT'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id 'basking2'
+                            name 'Sam'
+                            email 'basking2@yahoo.com'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
