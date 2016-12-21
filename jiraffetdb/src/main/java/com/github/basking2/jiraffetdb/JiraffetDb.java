@@ -81,7 +81,7 @@ public class JiraffetDb {
 
     public void start() {
         try {
-            Jiraffet jiraffet = new Jiraffet(io.getNodeId(), log, io);
+            Jiraffet jiraffet = new Jiraffet(log, io);
 
             jiraffet.setLeaderTimeout(2000);
             jiraffet.setFollowerTimeout(5000);

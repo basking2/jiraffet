@@ -66,6 +66,12 @@ public interface JiraffetIO extends VersionVoter.NodeCounter
     List<Message> getMessages(long timeout, TimeUnit timeunit) throws JiraffetIOException, TimeoutException, InterruptedException;
 
     /**
+     * Return this node's id on the network.
+     * @return this node's id on the network.
+     */
+    String getNodeId();
+
+    /**
      * Return the list of nodes this IO layer knows about. This makes up the cluster.
      * @return the list of nodes this IO layer knows about. This makes up the cluster.
      */

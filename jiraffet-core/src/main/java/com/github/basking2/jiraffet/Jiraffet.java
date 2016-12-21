@@ -27,11 +27,6 @@ public class Jiraffet
 {
     public static final Logger LOG = LoggerFactory.getLogger(Jiraffet.class);
 
-    /**
-     * This node's ID.
-     */
-    private String id;
-
     private String currentLeader;
 
     /**
@@ -89,17 +84,14 @@ public class Jiraffet
     private long leaderTimeoutMs;
 
     /**
-     * @param id How we are identified on the network. This must be sufficient for other nodes to connect to us
-     *           as it will be advertised and used when we vote for ourselves.
      * @param log Where entries are committed and applied. Also it holds some persistent state such
      *            as the current term and whom we last voted for.
      * @param io How messsages are sent to other nodes.
      */
-    public Jiraffet(final String id, final LogDao log, final JiraffetIO io) {
+    public Jiraffet(final LogDao log, final JiraffetIO io) {
         this.io = io;
         this.log = log;
         this.mode = State.FOLLOWER;
-        this.id = id;
         this.commitIndex = 0;
         this.lastApplied = 0;
         this.leaderTimeoutMs = 5000;
@@ -183,7 +175,7 @@ public class Jiraffet
         if (req.getTerm() < log.getCurrentTerm()) {
             LOG.info("Rejecting log from {}. Previous term {}.", req.getLeaderId(), req.getPrevLogTerm());
             // Ignore invalid request.
-            resp = req.reject(id, log.last().getIndex());
+            resp = req.reject(io.getNodeId(), log.last().getIndex());
         }
 
         // If the leader knows the previous log state, we can apply this.
@@ -213,11 +205,11 @@ public class Jiraffet
             receiveTimer.set(followerTimeoutMs);
 
             LOG.info("Accepted log update from {}.", req.getLeaderId());
-            resp = req.accept(id);
+            resp = req.accept(io.getNodeId());
         }
         else {
             LOG.info("Rejecting from {}. We don't have entry term/index {}/{}.", req.getLeaderId(), req.getPrevLogTerm(), req.getPrevLogIndex());
-            resp = req.reject(id, log.last().getIndex());
+            resp = req.reject(io.getNodeId(), log.last().getIndex());
         }
 
         // Send response back to leader.
@@ -310,8 +302,8 @@ public class Jiraffet
 
                             // Should we win the election.
                             if (votes > io.nodeCount() / 2) {
-                                LOG.info("Node {} believes itself the leader for term {}.", id, log.getCurrentTerm());
-                                currentLeader = id;
+                                LOG.info("Node {} believes itself the leader for term {}.", io.getNodeId(), log.getCurrentTerm());
+                                currentLeader = io.getNodeId();
                                 mode = State.LEADER;
                                 log.setVotedFor(null);
 
@@ -486,13 +478,13 @@ public class Jiraffet
 
             // votes = 1, we vote for ourselves.
             votes = 1;
-            log.setVotedFor(id);
+            log.setVotedFor(io.getNodeId());
             versionVoter.clear();
 
             // There is no current leader.
             currentLeader = null;
 
-            io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), id, log.last()));
+            io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), io.getNodeId(), log.last()));
 
             receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
         }
@@ -538,14 +530,6 @@ public class Jiraffet
         catch (final JiraffetIOException e) {
             LOG.error("Casting vote.", e);
         }
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
     }
 
     public LogDao getLog() {
