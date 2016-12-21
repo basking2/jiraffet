@@ -59,7 +59,8 @@ public class LogDaoMyBatisTest {
                 (int)(Math.random() * Integer.MAX_VALUE),
                 (int)(Math.random() * Integer.MAX_VALUE));
 
-        assertNull(db.getMeta(meta.getIndex()));
+        assertEquals(0, db.getMeta(meta.getIndex()).getIndex());
+        assertEquals(0, db.getMeta(meta.getIndex()).getTerm());
 
         db.write(meta.getTerm(), meta.getIndex(), new byte[]{1,2,3,4});
 
@@ -75,7 +76,8 @@ public class LogDaoMyBatisTest {
         assertFalse(db.hasEntry(meta.getIndex(), meta.getTerm()+1));
 
         db.remove(Integer.MIN_VALUE);
-        assertNull(db.getMeta(meta.getIndex()));
+        assertEquals(0, db.getMeta(meta.getIndex()).getIndex());
+        assertEquals(0, db.getMeta(meta.getIndex()).getTerm());
     }
     
     @Test public void testRead() throws JiraffetIOException {
