@@ -107,7 +107,7 @@ public class Jiraffet
         this.nextIndex = new HashMap<>();
         this.running = false;
         this.receiveTimer = new Timer(followerTimeoutMs);
-        this.versionVoter = new VersionVoter(io.nodeCount());
+        this.versionVoter = new VersionVoter(io);
     }
 
     /**
@@ -560,9 +560,4 @@ public class Jiraffet
         return io;
     }
 
-    public void setIo(JiraffetIO io) {
-        this.versionVoter.clear();
-        this.versionVoter.setVoters(io.nodeCount());
-        this.io = io;
-    }
 }

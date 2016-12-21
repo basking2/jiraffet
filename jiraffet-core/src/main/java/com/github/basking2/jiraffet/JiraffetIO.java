@@ -5,13 +5,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.github.basking2.jiraffet.messages.*;
+import com.github.basking2.jiraffetdb.util.VersionVoter;
 
 /**
  * Define how Jiraffet communicates with the outside world.
  *
  * This api is intended to function in a single threaded application, but may do it's work concurrently.
  */
-public interface JiraffetIO
+public interface JiraffetIO extends VersionVoter.NodeCounter
 {
     /**
      * Send the given vote request to all nodes and collect the responses.
@@ -47,15 +48,6 @@ public interface JiraffetIO
      * @throws JiraffetIOException On any IO error.
      */
     void appendEntries(String id, AppendEntriesResponse resp) throws JiraffetIOException;
-
-    /**
-     * Return the number of nodes this object knows about.
-     *
-     * Quorum is ((nodeCount() + 1) / 2) + 1.
-     *
-     * @return the number of nodes this object knows about.
-     */
-    int nodeCount();
 
     /**
      * Read from the input queue as many messages as are available.

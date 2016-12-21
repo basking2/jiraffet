@@ -7,7 +7,7 @@ public class VersionVoterTest {
 
     @Test
     public void testVoteFor() {
-        final VersionVoter vv = new VersionVoter(5);
+        final VersionVoter vv = new VersionVoter(new Voters(5));
         
         final int[] votes = new int[] { 0 };
         
@@ -30,7 +30,7 @@ public class VersionVoterTest {
 
     @Test
     public void testVoteForHigher() {
-        final VersionVoter vv = new VersionVoter(5);
+        final VersionVoter vv = new VersionVoter(new Voters(5));
         
         final int[] votes = new int[] { 0 };
         
@@ -46,6 +46,18 @@ public class VersionVoterTest {
         vv.vote(4);
         assertEquals(3, votes[0]);
         assertEquals(4, vv.getCurrentVersion());
+    }
+
+    private static class Voters implements VersionVoter.NodeCounter {
+        private int voters;
+        public Voters(final int voters) {
+            this.voters = voters;
+        }
+
+        @Override
+        public int nodeCount() {
+            return voters;
+        }
     }
 
 }

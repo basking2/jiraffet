@@ -1,5 +1,7 @@
 package com.github.basking2.jiraffetdb.util;
 
+import com.github.basking2.jiraffet.JiraffetIO;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,9 +34,9 @@ public class VersionVoter {
     /**
      * How many voters are in this election.
      */
-    private int voters;
+    private NodeCounter voters;
 
-    public VersionVoter(final int voters) {
+    public VersionVoter(final NodeCounter voters) {
         this.votes = new HashMap<>();
         this.listeners = new HashMap<>();
         this.rejections = new HashMap<>();
@@ -49,7 +51,7 @@ public class VersionVoter {
         rejections.put(version, rejectTotal);
 
         // If a version is utterly rejected, tell the client.
-        if (rejectTotal > voters / 2) {
+        if (rejectTotal > voters.nodeCount() / 2) {
             notifyOfNewVersion(version, false);
         }
     }
@@ -68,7 +70,7 @@ public class VersionVoter {
         votes.put(version, voteTotal);
 
         // If we have a new highest vote total, adjust our stored voters to save space.
-        if (voteTotal > voters / 2 && version > currentVersion) {
+        if (voteTotal > voters.nodeCount() / 2 && version > currentVersion) {
             newVersion(version);
         }
         else {
@@ -111,7 +113,7 @@ public class VersionVoter {
                 votes.put(k, v);
 
                 // If that vote makes the lower key a winning key, note as much.
-                if (v > voters / 2 && v > highestWinner) {
+                if (v > voters.nodeCount() / 2 && v > highestWinner) {
                     highestWinner = v;
                 }
             }
@@ -151,19 +153,6 @@ public class VersionVoter {
         }
     }
 
-    /**
-     * Sets the current number of voters.
-     *
-     * It is save to increase this, but decreasing it may delay detection of a new winner.
-     *
-     * It is best to clear this datastructure before setting votes.
-     *
-     * @param voters The number of votes to compute a majority from.
-     */
-    public void setVoters(int voters) {
-        this.voters = voters;
-    }
-
     public void clear() {
         for (Map.Entry<Integer, VersionListener> entry : listeners.entrySet()) {
             entry.getValue().success(entry.getKey(), false);
@@ -186,4 +175,7 @@ public class VersionVoter {
         void success(int version, boolean success);
     }
 
+    public interface NodeCounter {
+        int nodeCount();
+    }
 }
