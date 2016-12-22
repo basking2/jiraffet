@@ -542,4 +542,8 @@ public class Jiraffet
     public String getCurrentLeader() {
         return currentLeader;
     }
+
+    public boolean isLeader() {
+        return getCurrentLeader().equals(io.getNodeId());
+    }
 }
