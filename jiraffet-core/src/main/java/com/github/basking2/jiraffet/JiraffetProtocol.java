@@ -35,7 +35,7 @@ public class JiraffetProtocol {
             throw new IllegalArgumentException("Unsupported class: "+message.getClass());
         }
     }
-
+    
     private ByteBuffer marshal(final RequestVoteResponse message) {
         final int len = 16;
 

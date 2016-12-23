@@ -32,8 +32,7 @@ artifacts {
 
 dependencies {
     compile 'ch.qos.logback:logback-classic:1.1.7'
-    compile project(':jiraffet-tcp')
-    compile project(':jiraffet-h2')
+    compile project(':jiraffet-core')
 
     //compile 'org.apache.commons:commons-compress:1.11'
     compile 'commons-io:commons-io:2.5'
@@ -41,6 +40,13 @@ dependencies {
     //compile 'org.tukaani:xz:1.5'
     compile 'commons-beanutils:commons-beanutils:1.9.3'
     compile 'org.apache.commons:commons-configuration2:2.1'
+    
+    compile 'com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:2.8.5'
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.8.5'
+    compile 'org.glassfish.grizzly:grizzly-http-server:2.3.23'
+    compile 'org.glassfish.grizzly:grizzly-framework:2.3.23'
+    compile 'org.glassfish.grizzly:grizzly-http:2.3.23'
+    
     //compile 'com.google.guava:guava:19.0'
 
     testCompile 'junit:junit:4.12'
