@@ -13,10 +13,13 @@ public class JiraffetJson {
     @Path("ping")
     @Produces(MediaType.APPLICATION_JSON)
     public Object ping() {
-        HashMap<String, String> m = new HashMap<>();
+        final HashMap<String, String> m = new HashMap<>();
+
         m.put("status", "OK");
         
         return m;
     }
+    
+    
 
 }

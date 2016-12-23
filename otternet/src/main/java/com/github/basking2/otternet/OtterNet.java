@@ -9,21 +9,41 @@ import org.glassfish.jersey.jackson.JacksonFeature;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.wadl.WadlFeature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class OtterNet {
+public class OtterNet implements AutoCloseable {
+    final HttpServer httpServer;
+    private static final Logger LOG = LoggerFactory.getLogger(OtterNet.class);
+    
     public static final void main(final String[] argv) throws InterruptedException, IOException {
+        final OtterNet otterNet = new OtterNet();
+        
+        otterNet.start();
 
-        new OtterNet().start();
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{
+            try {
+                otterNet.close();
+            }
+            catch (final Exception e) {
+                LOG.error(e.getMessage(), e);
+            }
+        }));
 
         Thread.currentThread().join();
+        
+    }
+    
+    public OtterNet() {
+        this.httpServer = new HttpServer();
     }
     
     public void start() throws IOException {
-        HttpServer httpServer = new HttpServer();
-        NetworkListener networkListener = new NetworkListener("otter", "0.0.0.0", 8765);
-        httpServer.addListener(networkListener);
+        final NetworkListener networkListener = new NetworkListener("otter", "0.0.0.0", 8765);
         
-        HttpHandler dynamicHandler = ContainerFactory.createContainer(HttpHandler.class, resourceConfig());
+        final HttpHandler dynamicHandler = ContainerFactory.createContainer(HttpHandler.class, resourceConfig());
+
+        httpServer.addListener(networkListener);
 
         httpServer.getServerConfiguration().addHttpHandler(dynamicHandler, "/");
 
@@ -37,5 +57,10 @@ public class OtterNet {
         rc.register(JacksonFeature.class);
         //rc.register(HTTPResponseFilter.class);
         return rc;
+    }
+
+    @Override
+    public void close() throws Exception {
+        httpServer.shutdown();
     }
 }
