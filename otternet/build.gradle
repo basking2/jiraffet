@@ -43,10 +43,17 @@ dependencies {
     
     compile 'com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:2.8.5'
     compile 'com.fasterxml.jackson.core:jackson-databind:2.8.5'
-    compile 'org.glassfish.grizzly:grizzly-http-server:2.3.23'
+    compile 'com.fasterxml.jackson.datatype:jackson-datatype-joda:2.5.0'
+
     compile 'org.glassfish.grizzly:grizzly-framework:2.3.23'
     compile 'org.glassfish.grizzly:grizzly-http:2.3.23'
+    compile 'org.glassfish.grizzly:grizzly-http-server:2.3.23'
+    compile 'org.glassfish.jersey.containers:jersey-container-grizzly2-http:2.22'
+    compile 'org.glassfish.jersey.media:jersey-media-json-jackson:2.25'
     
+
+
+
     //compile 'com.google.guava:guava:19.0'
 
     testCompile 'junit:junit:4.12'
