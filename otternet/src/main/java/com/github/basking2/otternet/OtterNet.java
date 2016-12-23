@@ -12,6 +12,9 @@ import org.glassfish.jersey.server.wadl.WadlFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.basking2.otternet.http.JiraffetJson;
+import com.github.basking2.otternet.jiraffet.OtterIO;
+
 public class OtterNet implements AutoCloseable {
     final HttpServer httpServer;
     private static final Logger LOG = LoggerFactory.getLogger(OtterNet.class);
@@ -51,10 +54,11 @@ public class OtterNet implements AutoCloseable {
     }
     
     public ResourceConfig resourceConfig() {
-        ResourceConfig rc = new ResourceConfig();
-        rc.packages("com.github.basking2.otternet.http");
+        final ResourceConfig rc = new ResourceConfig();
+        rc.register(new JiraffetJson(new OtterIO(null, null)));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);
+        rc.packages("com.github.basking2.otternet.http.scanned");
         //rc.register(HTTPResponseFilter.class);
         return rc;
     }
