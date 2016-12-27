@@ -29,7 +29,7 @@ public class OtterNet implements AutoCloseable {
 
     private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
     private OtterIO io = new OtterIO(null, null);
-    private OtterLog log = new OtterLog();
+    private OtterLog log = new OtterLog(this, io);
     final Jiraffet jiraffet = new Jiraffet(log, io);
 
     public static final void main(final String[] argv) throws InterruptedException, IOException {
@@ -82,7 +82,11 @@ public class OtterNet implements AutoCloseable {
     public void join(final String cluster) throws MalformedURLException {
         final URL url = new URL(cluster);
     }
-    
+
+    public void leave(final String cluster) throws MalformedURLException {
+        final URL url = new URL(cluster);
+    }
+
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
         rc.register(new JiraffetJson(io, log));

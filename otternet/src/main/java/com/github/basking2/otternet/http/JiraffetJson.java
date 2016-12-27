@@ -83,23 +83,13 @@ public class JiraffetJson {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response postJoin(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
 
-        final ClientResponse clientResponse = io.clientRequest(("join "+join.getId()).getBytes()).get(30, TimeUnit.SECONDS);
+        final ClientResponse clientResponse = io.clientRequestJoin(join.getId()).get(30, TimeUnit.SECONDS);
 
         final JoinResponse joinResponse = new JoinResponse();
 
         joinResponse.setLeader(clientResponse.getLeader());
 
-        if (clientResponse.isSuccess()) {
-            io.nodes().add(join.getId());
-            joinResponse.setStatus(JsonResponse.OK);
-            return Response.ok(joinResponse).build();
-        }
-        else if (io.getNodeId().equals(clientResponse.getLeader())) {
-            return Response.serverError().entity(joinResponse).build();
-        }
-        else {
-            return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
-        }
+        return postJoinLeaveClientResponse(clientResponse, joinResponse);
     }
 
     @POST
@@ -108,14 +98,17 @@ public class JiraffetJson {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response postLeave(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
 
-        final ClientResponse clientResponse = io.clientRequest(("leave "+join.getId()).getBytes()).get(30, TimeUnit.SECONDS);
+        final ClientResponse clientResponse = io.clientRequestLeave(join.getId()).get(30, TimeUnit.SECONDS);
 
         final JoinResponse joinResponse = new JoinResponse();
 
         joinResponse.setLeader(clientResponse.getLeader());
 
+        return postJoinLeaveClientResponse(clientResponse, joinResponse);
+    }
+
+    private Response postJoinLeaveClientResponse(final ClientResponse clientResponse, final JoinResponse joinResponse) throws URISyntaxException {
         if (clientResponse.isSuccess()) {
-            io.nodes().add(join.getId());
             joinResponse.setStatus(JsonResponse.OK);
             return Response.ok(joinResponse).build();
         }
@@ -125,6 +118,7 @@ public class JiraffetJson {
         else {
             return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
         }
+
     }
 
     private Map<String, Object> response(final String status){

@@ -2,7 +2,12 @@ package com.github.basking2.otternet.jiraffet;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.otternet.OtterNet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.net.MalformedURLException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,52 +15,9 @@ import java.util.List;
  * A simplistic implementation.
  */
 public class OtterLog implements LogDao {
+    private static final Logger LOG = LoggerFactory.getLogger(OtterLog.class);
     private int currentTerm;
     private String votedFor;
-
-    /**
-     * The type of log entry stored. This determins how the log is applied.
-     */
-    enum LogEntryType {
-        /**
-         * A log entry that has no effect. Useful for setting barrier versions.
-         */
-        NOP_ENTRY,
-
-        /**
-         * A node is added to the cluster. Contents is a string.
-         */
-        JOIN_ENTRY,
-        /**
-         * A node is removed from the cluster. Contents is a string.
-         */
-        LEAVE_ENTRY,
-
-        /**
-         * The low-water mark for a database snapsshot.
-         *
-         * When a SNAPSHOT_ENTRY with the same ID value is recieved entries before this may be discarded.
-         */
-        SNAPSHOT_START_ENTRY,
-        /**
-         * This signals that the log should be compacted from the start up to the SNAPSHOT_START_ENTRY with the
-         * same ID value.
-         */
-        SNAPSHOT_ENTRY,
-
-        /**
-         * Application data. This is handed off to the app processor to be integrated into the user application.
-         */
-        APP_DATA;
-
-        public static LogEntryType fromByte(byte b) {
-            if (b < 0 || b >= values().length) {
-                return NOP_ENTRY;
-            }
-
-            return values()[b];
-        }
-    }
 
     /**
      * Offset of the database. This supports log compaction.
@@ -63,6 +25,15 @@ public class OtterLog implements LogDao {
     private int offset = 0;
     private List<byte[]> dataLog = new ArrayList<>();
     private List<EntryMeta> metaLog = new ArrayList<>();
+
+    private final OtterNet otterNet;
+    private final OtterIO io;
+
+    public OtterLog(final OtterNet otterNet, final OtterIO io) {
+        this.otterNet = otterNet;
+        this.io = io;
+
+    }
 
     @Override
     public void setCurrentTerm(int currentTerm) throws JiraffetIOException {
@@ -154,8 +125,7 @@ public class OtterLog implements LogDao {
 
         try {
             data = read(index);
-        }
-        catch (JiraffetIOException e) {
+        } catch (JiraffetIOException e) {
             throw new IllegalStateException(e.getMessage(), e);
         }
 
@@ -167,20 +137,43 @@ public class OtterLog implements LogDao {
                 // FIXME - write this.
                 break;
             case JOIN_ENTRY:
-                final String joinHost = new String(data, 1, data.length-1);
+                final String joinHost = new String(data, 1, data.length - 1);
+                io.nodes().add(joinHost);
                 break;
             case LEAVE_ENTRY:
-                final String leaveHost = new String(data, 1, data.length-1);
+                final String leaveHost = new String(data, 1, data.length - 1);
+                io.nodes().remove(leaveHost);
                 break;
             case SNAPSHOT_ENTRY:
-                final String snapShotTo = new String(data, 1, data.length-1);
-                break;
-            case SNAPSHOT_START_ENTRY:
-                // Nop - snapshot entries are markers used by SNAPSHOT_ENTRY values.
+                final int firstIndex = ByteBuffer.wrap(data).getInt(1);
+                purgeBefore(firstIndex);
                 break;
             default:
-                throw new IllegalStateException("Unexpected data type: "+data[0]);
+                throw new IllegalStateException("Unexpected data type: " + data[0]);
         }
+    }
+
+    /**
+     * Delete all entries before the given index.
+     *
+     * This effectively compacts the log.
+     *
+     * The {@link #offset} field is set to the value of index as the first element in the new arrays is the
+     * lowest and first index we have.
+     * @param index
+     */
+    private void purgeBefore(final int index) {
+        int offsetIndex = index - offset;
+
+        // Create a view into the logs.
+        final List dataLogView = dataLog.subList(offsetIndex, dataLog.size());
+        final List metaLogView = metaLog.subList(offsetIndex, metaLog.size());
+
+        // Now create independent logs from those views, freeing the memory for the previous entries.
+        dataLog = new ArrayList(dataLogView);
+        metaLog = new ArrayList(metaLogView);
+
+        offset = index;
     }
 
     @Override
@@ -191,4 +184,42 @@ public class OtterLog implements LogDao {
 
         return metaLog.get(metaLog.size()-1);
     }
+
+    /**
+     * The type of log entry stored. This determines how the log is applied.
+     */
+    enum LogEntryType {
+        /**
+         * A log entry that has no effect. Useful for setting barrier versions.
+         */
+        NOP_ENTRY,
+
+        /**
+         * A node is added to the cluster. Contents is a string.
+         */
+        JOIN_ENTRY,
+        /**
+         * A node is removed from the cluster. Contents is a string.
+         */
+        LEAVE_ENTRY,
+
+        /**
+         * This signals that the log should be compacted from the start up to the encoded integer index.
+         */
+        SNAPSHOT_ENTRY,
+
+        /**
+         * Application data. This is handed off to the app processor to be integrated into the user application.
+         */
+        APP_DATA;
+
+        public static LogEntryType fromByte(byte b) {
+            if (b < 0 || b >= values().length) {
+                return NOP_ENTRY;
+            }
+
+            return values()[b];
+        }
+    }
+
 }

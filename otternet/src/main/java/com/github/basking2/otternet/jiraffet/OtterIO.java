@@ -3,8 +3,11 @@ package com.github.basking2.otternet.jiraffet;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 
 import org.slf4j.Logger;
@@ -117,6 +120,26 @@ public class OtterIO implements JiraffetIO {
         });
 
         return future;
+    }
+
+    public Future<ClientResponse> clientRequestJoin(final String id) {
+        byte[] idBytes = id.getBytes();
+        byte[] joinRequest = new byte[1 + idBytes.length];
+        joinRequest[0] = (byte) OtterLog.LogEntryType.JOIN_ENTRY.ordinal();
+
+        ByteBuffer.wrap(joinRequest).put(idBytes,1, idBytes.length);
+
+        return clientRequest(joinRequest);
+    }
+
+    public Future<ClientResponse> clientRequestLeave(final String id) {
+        byte[] idBytes = id.getBytes();
+        byte[] leaveRequest = new byte[1 + idBytes.length];
+        leaveRequest[0] = (byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal();
+
+        ByteBuffer.wrap(leaveRequest).put(idBytes,1, idBytes.length);
+
+        return clientRequest(leaveRequest);
     }
 
     private void postTo(final String url, final Message message) {
