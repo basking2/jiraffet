@@ -5,10 +5,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,9 +73,14 @@ public class OtterIO implements JiraffetIO {
     public List<Message> getMessages(long timeout, TimeUnit timeunit)
             throws JiraffetIOException, TimeoutException, InterruptedException {
         ArrayList<Message> messages = new ArrayList<>();
-        
-        messages.add(queue.poll(timeout, timeunit));
-        
+
+        Message m = queue.poll(timeout, timeunit);
+        if (m == null) {
+            return messages;
+        }
+
+        messages.add(m);
+
         queue.drainTo(messages);
         
         return messages;
@@ -99,13 +101,34 @@ public class OtterIO implements JiraffetIO {
         queue.addAll(clientRequests);
     }
 
+    public Future<ClientResponse> clientRequest(final byte[] message) {
+        final CompletableFuture<ClientResponse> future = new CompletableFuture<>();
+
+        queue.add(new ClientRequest() {
+            @Override
+            public byte[] getData() {
+                return message;
+            }
+
+            @Override
+            public void complete(boolean success, String leader, String msg) {
+                future.complete(new ClientResponse(success, leader, msg));
+            }
+        });
+
+        return future;
+    }
+
     private void postTo(final String url, final Message message) {
         try {
-        final HttpURLConnection con = (HttpURLConnection)new URL(url).openConnection();
-        con.setDoOutput(true);
-        con.setRequestMethod("POST");
-        objectMapper.writeValue(con.getOutputStream(), message);
-        con.getOutputStream().close();
+            final HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+            con.setInstanceFollowRedirects(true);
+            con.setConnectTimeout(500);
+            con.setReadTimeout(500);
+            con.setDoOutput(true);
+            con.setRequestMethod("POST");
+            objectMapper.writeValue(con.getOutputStream(), message);
+            con.getOutputStream().close();
         }
         catch (final JsonMappingException e) {
             LOG.error("Generating JSON", e);

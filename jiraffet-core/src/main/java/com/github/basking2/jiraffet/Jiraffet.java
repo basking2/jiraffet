@@ -7,16 +7,11 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.github.basking2.jiraffet.messages.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.LogDao.EntryMeta;
-import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
-import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
-import com.github.basking2.jiraffet.messages.ClientRequest;
-import com.github.basking2.jiraffet.messages.Message;
-import com.github.basking2.jiraffet.messages.RequestVoteRequest;
-import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 import com.github.basking2.jiraffetdb.util.Timer;
 import com.github.basking2.jiraffetdb.util.VersionVoter;
 
@@ -28,6 +23,11 @@ import static java.util.Arrays.asList;
 public class Jiraffet
 {
     public static final Logger LOG = LoggerFactory.getLogger(Jiraffet.class);
+
+    /**
+     * A limit on the number of log messages sent in any update.
+     */
+    private static final int LOG_ENTRY_LIMIT = 10;
 
     private String currentLeader;
 
@@ -137,10 +137,14 @@ public class Jiraffet
      */
     public AppendEntriesRequest appendEntries(final String id) throws JiraffetIOException {
 
+        // A node has not told the leader which index they want next.
+        // Assume they would like the very next index (they are totally up-to-date).
+        // If they are not, they can correct us.
         if (!nextIndex.containsKey(id)) {
             nextIndex.put(id, commitIndex);
         }
 
+        // Get the commit log index we would like to send to the node.
         final int index = nextIndex.get(id);
 
         final List<byte[]> entries;
@@ -151,10 +155,12 @@ public class Jiraffet
         }
         else {
 
-            entries = new ArrayList<>(commitIndex - index);
+            final int entriesToSend = Math.min(LOG_ENTRY_LIMIT, commitIndex - index);
 
-            for (int i = index; i < commitIndex; ++i) {
-                entries.add(log.read(i));
+            entries = new ArrayList<>(entriesToSend);
+
+            for (int i = 0; i < entriesToSend; ++i) {
+                entries.add(log.read(index + i));
             }
         }
 
@@ -218,6 +224,11 @@ public class Jiraffet
         io.appendEntries(req.getLeaderId(), resp);
     }
 
+    /**
+     * The leader has just learned that a majority of nodes have committed {@link #commitIndex}.
+     *
+     * Thus, it is allowable to apply {@link #lastApplied} up to {@link #commitIndex}.
+     */
     public void applyCommitted() {
         // We just got new stuff. Try to update our appended progress.
         while (commitIndex > lastApplied) {
@@ -227,6 +238,7 @@ public class Jiraffet
 
     /**
      * Initialization to be done upon becoming a leader.
+     *
      * @throws JiraffetIOException On any error.
      */
     public void leaderInit() throws JiraffetIOException {

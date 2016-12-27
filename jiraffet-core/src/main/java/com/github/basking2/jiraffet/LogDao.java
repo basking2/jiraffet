@@ -37,6 +37,13 @@ public interface LogDao {
 
     EntryMeta getMeta(int index) throws JiraffetIOException;
 
+    /**
+     * Read a log entry.
+     *
+     * @param index The index of the entry to fetch.
+     * @return A log entry.
+     * @throws JiraffetIOException
+     */
     byte[] read(int index) throws JiraffetIOException;
 
     boolean hasEntry(int index, int term) throws JiraffetIOException;
