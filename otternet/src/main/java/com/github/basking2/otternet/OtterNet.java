@@ -1,15 +1,10 @@
 package com.github.basking2.otternet;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.concurrent.Executors;
+import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
-import com.github.basking2.jiraffet.Jiraffet;
-import com.github.basking2.jiraffet.JiraffetIOException;
-import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.glassfish.grizzly.http.server.HttpHandler;
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.glassfish.grizzly.http.server.NetworkListener;
@@ -20,15 +15,25 @@ import org.glassfish.jersey.server.wadl.WadlFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.otternet.http.JiraffetJson;
 import com.github.basking2.otternet.jiraffet.OtterIO;
+import com.github.basking2.otternet.jiraffet.OtterLog;
+import com.github.basking2.otternet.util.Ip;
 
+/**
+ * Startup Main line that does surprisingly little of the work and magic.
+ * 
+ * @see OtterIO
+ * @see OtterLog
+ */
 public class OtterNet implements AutoCloseable {
     final HttpServer httpServer;
     private static final Logger LOG = LoggerFactory.getLogger(OtterNet.class);
 
     private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
-    private OtterIO io = new OtterIO(null, null);
+    private OtterIO io = new OtterIO(Ip.whatsMyIp(), new ArrayList<>());
     private OtterLog log = new OtterLog(this, io);
     final Jiraffet jiraffet = new Jiraffet(log, io);
 
@@ -74,17 +79,9 @@ public class OtterNet implements AutoCloseable {
                 return;
             });
 
-        jiraffetThread.start();
         jiraffetThread.setDaemon(true);
+        jiraffetThread.start();
 
-    }
-
-    public void join(final String cluster) throws MalformedURLException {
-        final URL url = new URL(cluster);
-    }
-
-    public void leave(final String cluster) throws MalformedURLException {
-        final URL url = new URL(cluster);
     }
 
     public ResourceConfig resourceConfig() {
