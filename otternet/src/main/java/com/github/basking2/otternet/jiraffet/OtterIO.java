@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 
+import org.glassfish.jersey.jackson.JacksonFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +25,13 @@ import com.github.basking2.jiraffet.messages.ClientRequest;
 import com.github.basking2.jiraffet.messages.Message;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
+
+import javax.ws.rs.ProcessingException;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 public class OtterIO implements JiraffetIO {
     
@@ -51,25 +59,25 @@ public class OtterIO implements JiraffetIO {
     @Override
     public void requestVotes(RequestVoteRequest req) throws JiraffetIOException {
         for (final String node : nodes) {
-            postTo(node + "/jiraffet/vote/request", req);
+            postTo(node, "/jiraffet/vote/request", req);
         }
     }
 
     @Override
     public void requestVotes(String candidateId, RequestVoteResponse req) throws JiraffetIOException {
-        postTo(candidateId + "/jiraffet/vote/response", req);
+        postTo(candidateId, "/jiraffet/vote/response", req);
     }
 
     @Override
     public void appendEntries(String id, AppendEntriesRequest req) throws JiraffetIOException {
         for (final String node : nodes) {
-            postTo(node + "/jiraffet/append/request", req);
+            postTo(node, "/jiraffet/append/request", req);
         }
     }
 
     @Override
     public void appendEntries(String id, AppendEntriesResponse resp) throws JiraffetIOException {
-        postTo(id + "/jiraffet/append/response", resp);
+        postTo(id, "/jiraffet/append/response", resp);
     }
 
     @Override
@@ -169,31 +177,33 @@ public class OtterIO implements JiraffetIO {
 
     /**
      * Used to post to other {@link OtterIO} instances running on remote servers.
-     * @param url
+     * @param host
+     * @param path
      * @param message
      */
-    private void postTo(final String url, final Message message) {
+    private void postTo(final String host, final String path, final Message message) {
         try {
-            final HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
-            con.setInstanceFollowRedirects(true);
-            con.setConnectTimeout(500);
-            con.setReadTimeout(500);
-            con.setDoOutput(true);
-            con.setRequestMethod("POST");
-            objectMapper.writeValue(con.getOutputStream(), message);
-            con.getOutputStream().close();
+            final WebTarget wt = ClientBuilder.
+                    newBuilder().
+                    build().
+                    register(JacksonFeature.class).
+                    target(host).
+                    path(path);
+
+            final Response r = wt.
+                    request().
+                    buildPost(Entity.entity(message, MediaType.APPLICATION_JSON)).
+                    invoke();
+
+            if (r.getStatus() >= 300) {
+                LOG.error("Unexpected status: {}", r.getStatus());
+            }
         }
-        catch (final JsonMappingException e) {
-            LOG.error("Generating JSON", e);
-        }
-        catch (final JsonGenerationException e) {
-            LOG.error("Generating JSON", e);
-        }
-        catch (final IOException e) {
-            LOG.error("Writing result.", e);
+        catch (final ProcessingException t) {
+            LOG.error("Posting to {} path {}.", host, path, t);
         }
     }
-    
+
     public void add(final Message msg) {
         queue.add(msg);
     }

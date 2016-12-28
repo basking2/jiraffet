@@ -23,6 +23,7 @@ public class App {
     public App(final String name){
         this.name = name;
     }
+
     public App(final Class<?> clazz){
         this(clazz.getSimpleName().toLowerCase());
     }

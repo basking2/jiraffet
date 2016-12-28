@@ -7,6 +7,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import com.github.basking2.otternet.http.ControlService;
 import com.github.basking2.otternet.util.App;
+import org.apache.commons.cli.*;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.glassfish.grizzly.http.server.*;
@@ -33,17 +34,22 @@ import com.github.basking2.otternet.util.Ip;
 public class OtterNet implements AutoCloseable {
     final HttpServer httpServer;
     private static final Logger LOG = LoggerFactory.getLogger(OtterNet.class);
+    static private App otterNetApp;
 
-    private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
-    private OtterIO io = new OtterIO(Ip.whatsMyIp(), new ArrayList<>());
-    private OtterLog log = new OtterLog(this, io);
-    final Jiraffet jiraffet = new Jiraffet(log, io);
-    final App otterNetApp;
-    final Configuration config;
+    final private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
+    final private OtterIO io;
+    final private OtterLog log;
+    final private Jiraffet jiraffet;
+    final private Configuration config;
 
-    public static final void main(final String[] argv) throws InterruptedException, IOException, ConfigurationException {
+    public static final void main(final String[] argv) throws InterruptedException, IOException, ConfigurationException, ParseException {
+
+        // Parse CLI arguments.
+        mainParseArgs(argv);
+
+        otterNetApp = new App("otternet");
+
         final OtterNet otterNet = new OtterNet();
-        
         otterNet.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(()->{
@@ -56,18 +62,70 @@ public class OtterNet implements AutoCloseable {
         }));
 
         Thread.currentThread().join();
-        
     }
-    
+
+    /**
+     * Parse the command line arguments into System properties to be picked up by the application.
+     *
+     * @param argv The user's command line options.
+     * @throws ParseException On a parser exception.
+     */
+    public static void mainParseArgs(final String[] argv) throws ParseException {
+        //================================================================================
+        // Option parsing
+        //================================================================================
+        final CommandLineParser cliParser = new DefaultParser();
+        final Options cliOptions = new Options().
+                addOption("p", "port", true, "Port to listen on.").
+                addOption("i", "ip", true, "IP to bind to. If set to \"auto\" an external site is used.").
+                addOption("I", "id", true, "http://address:port id used to locate this host and join clusters.").
+                addOption("H", "home", true, "Home directory.").
+                addOption("h", "help", false, "Help.");
+        final CommandLine commandLine = cliParser.parse(cliOptions, argv);
+
+        if (commandLine.hasOption('h')) {
+            HelpFormatter helpFormatter = new HelpFormatter();
+            helpFormatter.printHelp("otternet", "", cliOptions, "\nExiting.\n", true);
+            System.exit(1);
+        }
+
+        // Move all of our command line parsed options into the system properties where we'll pick them up.
+        if (commandLine.hasOption("p")) {
+            System.setProperty("otternet.port", commandLine.getOptionValue("p"));
+        }
+        if (commandLine.hasOption("i")) {
+            System.setProperty("otternet.addr", commandLine.getOptionValue("i"));
+        }
+        if (commandLine.hasOption("I")) {
+            System.setProperty("otternet.id", commandLine.getOptionValue("I"));
+        }
+        if (commandLine.hasOption("H")) {
+            System.setProperty("otternet.home", commandLine.getOptionValue("I"));
+        }
+        //================================================================================
+    }
+
     public OtterNet() throws ConfigurationException {
-        this.httpServer = new HttpServer();
-        this.otterNetApp = new App("otternet");
-        this.config = otterNetApp.buildConfiguration();
-    }
-    
-    public void start() throws IOException {
-        final NetworkListener networkListener =
-            new NetworkListener("otter", config.getString("otternet.addr"), config.getInt("otternet.port"));
+        config = otterNetApp.buildConfiguration();
+
+        String ip = config.getString("otternet.addr", "0.0.0.0");
+        if ("auto".equalsIgnoreCase(ip)) {
+            ip = Ip.whatsMyIp();
+        }
+
+        int port = config.getInt("otternet.port", 8080);
+
+        String id = "http://"+ip +":"+port;
+        if (config.getString("otter.id", null) != null) {
+            id = config.getString("otter.id");
+        }
+
+        io = new OtterIO(id, new ArrayList<>());
+        log = new OtterLog(this, io);
+        jiraffet = new Jiraffet(log, io);
+        httpServer = new HttpServer();
+
+        final NetworkListener networkListener = new NetworkListener("otter", ip, port);
 
         /*
         networkListener.setDefaultErrorPageGenerator(new ErrorPageGenerator() {
@@ -83,12 +141,16 @@ public class OtterNet implements AutoCloseable {
             }
         });
         */
-        
+
         final HttpHandler dynamicHandler = ContainerFactory.createContainer(HttpHandler.class, resourceConfig());
 
         httpServer.addListener(networkListener);
 
         httpServer.getServerConfiguration().addHttpHandler(dynamicHandler, "/");
+
+    }
+    
+    public void start() throws IOException {
 
         httpServer.start();
 
