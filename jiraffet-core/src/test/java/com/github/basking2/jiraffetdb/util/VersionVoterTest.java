@@ -48,6 +48,22 @@ public class VersionVoterTest {
         assertEquals(4, vv.getCurrentVersion());
     }
 
+    @Test
+    public void testVoteWith1Voter() {
+        final VersionVoter vv = new VersionVoter(new Voters(1));
+        final int[] votes = new int[]{ 0, 0 ,0, 0};
+        vv.setListener(2, (ver, succ) -> {
+            votes[ver] += 1;
+        });
+
+        vv.vote(2);
+
+        assertEquals(0, votes[1]);
+        assertEquals(1, votes[2]);
+        assertEquals(0, votes[3]);
+
+    }
+
     private static class Voters implements VersionVoter.NodeCounter {
         private int voters;
         public Voters(final int voters) {

@@ -402,6 +402,12 @@ public class Jiraffet
 
     }
 
+    /**
+     * If we are a leader, append these entries to our local log and replicate out.
+     *
+     * @param clientRequests Requests from the client on this machine.
+     * @throws JiraffetIOException On any error.
+     */
     private void appendEntries(final List<ClientRequest> clientRequests) throws JiraffetIOException {
 
         // Set the timer first to avoid a timeout.
@@ -413,32 +419,39 @@ public class Jiraffet
             log.write(log.getCurrentTerm(), commitIndex+1, clientRequest.getData());
         }
 
-        // Set what we do when this version is committed.
-        // NOTE: It is possible, in a very lagged deployment, for there to be many
-        // versions that become current and having many versionVoter listeners would give us
-        // more fine-grained progress. We do not assume this is the normal situation.
-        //
-        // The assumption in this is that the system will be mostly-consistent at all times.
-        versionVoter.setListener(commitIndex + clientRequests.size(), (ver, succ) -> {
+        // Only listen for commits if we have added new data. Client requests can be zero when heart beating.
+        if (clientRequests.size() > 0) {
 
-            String clientMsg = "";
-            boolean clientSucc = succ;
+            // Set what we do when this version is committed.
+            // NOTE: It is possible, in a very lagged deployment, for there to be many
+            // versions that become current and having many versionVoter listeners would give us
+            // more fine-grained progress. We do not assume this is the normal situation.
+            //
+            // The assumption in this is that the system will be mostly-consistent at all times.
+            versionVoter.setListener(commitIndex + clientRequests.size(), (ver, succ) -> {
 
-            if (succ) {
-                // If this version won an election, we know it is committed and safe to apply.
-                commitIndex = ver;
+                String clientMsg = "";
+                boolean clientSucc = succ;
 
-                // Apply committed stuff op to commitIndex.
-                applyCommitted();
+                if (succ) {
+                    // If this version won an election, we know it is committed and safe to apply.
+                    commitIndex = ver;
 
-                // FIXME - if there was a problem applying the message, change clientSucc and clientMsg.
-            }
+                    // Apply committed stuff op to commitIndex.
+                    applyCommitted();
 
-            // Tell the clients we've finished their request.
-            for (final ClientRequest cr : clientRequests) {
-                cr.complete(clientSucc, currentLeader, clientMsg);
-            }
-        });
+                    // FIXME - if there was a problem applying the message, change clientSucc and clientMsg.
+                }
+
+                // Tell the clients we've finished their request.
+                for (final ClientRequest cr : clientRequests) {
+                    cr.complete(clientSucc, currentLeader, clientMsg);
+                }
+            });
+
+            // We have a vote. :)
+            versionVoter.vote(commitIndex + clientRequests.size());
+        }
 
         // Send to all nodes in the cluster their update.
         for (final String id : io.nodes()) {

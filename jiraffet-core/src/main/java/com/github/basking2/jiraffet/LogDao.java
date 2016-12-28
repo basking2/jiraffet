@@ -42,7 +42,7 @@ public interface LogDao {
      *
      * @param index The index of the entry to fetch.
      * @return A log entry.
-     * @throws JiraffetIOException
+     * @throws JiraffetIOException On a read error.
      */
     byte[] read(int index) throws JiraffetIOException;
 
