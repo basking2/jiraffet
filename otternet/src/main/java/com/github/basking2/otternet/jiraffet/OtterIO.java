@@ -126,9 +126,11 @@ public class OtterIO implements JiraffetIO {
     public Future<ClientResponse> clientRequestJoin(final String id) {
         byte[] idBytes = id.getBytes();
         byte[] joinRequest = new byte[1 + idBytes.length];
-        joinRequest[0] = (byte) OtterLog.LogEntryType.JOIN_ENTRY.ordinal();
 
-        ByteBuffer.wrap(joinRequest).put(idBytes,1, idBytes.length);
+        ByteBuffer.
+                wrap(joinRequest).
+                put((byte) OtterLog.LogEntryType.JOIN_ENTRY.ordinal()).
+                put(idBytes, 0, idBytes.length);
 
         return clientRequest(joinRequest);
     }
@@ -138,7 +140,10 @@ public class OtterIO implements JiraffetIO {
         byte[] leaveRequest = new byte[1 + idBytes.length];
         leaveRequest[0] = (byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal();
 
-        ByteBuffer.wrap(leaveRequest).put(idBytes, 1, idBytes.length);
+        ByteBuffer.
+                wrap(leaveRequest).
+                put((byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal()).
+                put(idBytes, 1, idBytes.length);
 
         return clientRequest(leaveRequest);
     }

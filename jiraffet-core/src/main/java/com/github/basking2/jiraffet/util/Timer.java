@@ -1,4 +1,4 @@
-package com.github.basking2.jiraffetdb.util;
+package com.github.basking2.jiraffet.util;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;

@@ -1,5 +1,6 @@
 package com.github.basking2.jiraffetdb.util;
 
+import com.github.basking2.jiraffet.util.VersionVoter;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 

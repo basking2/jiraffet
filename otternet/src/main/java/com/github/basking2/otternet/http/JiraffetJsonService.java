@@ -22,13 +22,21 @@ import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.apache.commons.io.IOUtils;
 
+/**
+ * Implementation of Raft by Jiraffet on the local node.
+ *
+ * Calls in here are going to the Jiraffet and related services running.
+ *
+ * If a remote node tries to join the cluster, it will call /jiraffet/join to do so.
+ * If you want to instruct a node to join with a remote system
+ */
 @Path("jiraffet")
-public class JiraffetJson {
+public class JiraffetJsonService {
 
     private OtterIO io;
     private OtterLog log;
 
-    public JiraffetJson(final OtterIO io, final OtterLog log) {
+    public JiraffetJsonService(final OtterIO io, final OtterLog log) {
         this.io = io;
         this.log = log;
     }

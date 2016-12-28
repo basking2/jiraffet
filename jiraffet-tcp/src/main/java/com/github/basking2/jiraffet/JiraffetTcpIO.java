@@ -1,14 +1,13 @@
 package com.github.basking2.jiraffet;
 
 import com.github.basking2.jiraffet.messages.*;
-import com.github.basking2.jiraffetdb.util.Timer;
+import com.github.basking2.jiraffet.util.Timer;
 import com.github.basking2.sdsai.net.AppTcpPool;
 import com.github.basking2.sdsai.net.TcpPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.*;

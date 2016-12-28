@@ -12,10 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.LogDao.EntryMeta;
-import com.github.basking2.jiraffetdb.util.Timer;
-import com.github.basking2.jiraffetdb.util.VersionVoter;
-
-import static java.util.Arrays.asList;
+import com.github.basking2.jiraffet.util.Timer;
+import com.github.basking2.jiraffet.util.VersionVoter;
 
 /**
  * An instance of the Raft algorithm.
@@ -101,7 +99,10 @@ public class Jiraffet
         this.nextIndex = new HashMap<>();
         this.running = false;
         this.receiveTimer = new Timer(followerTimeoutMs);
-        this.versionVoter = new VersionVoter(io);
+
+        // Notice - Our version voter must require +1 nodes so as to include the leader.
+        //          A leader always implicitly votes as having comitted a value.
+        this.versionVoter = new VersionVoter(() -> io.nodeCount() + 1);
     }
 
     /**

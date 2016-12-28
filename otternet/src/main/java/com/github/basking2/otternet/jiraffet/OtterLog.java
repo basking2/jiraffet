@@ -165,6 +165,8 @@ public class OtterLog implements LogDao {
                 break;
             case JOIN_ENTRY:
                 final String joinHost = new String(data, 1, data.length - 1);
+                // Remove then add to ensure no duplicates.
+                io.nodes().remove(joinHost);
                 io.nodes().add(joinHost);
                 break;
             case LEAVE_ENTRY:

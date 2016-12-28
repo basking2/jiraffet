@@ -1,4 +1,4 @@
-package com.github.basking2.jiraffetdb.util;
+package com.github.basking2.jiraffet.util;
 
 import com.github.basking2.jiraffet.JiraffetIO;
 
@@ -57,7 +57,7 @@ public class VersionVoter {
     }
 
     /**
-     * Vote for the current version and, implicitly, for all preceeding versions.
+     * Vote for the current version and, implicitly, for all preceding versions.
      *
      * If any version gains a majority and is higher than the current version, it's listener (if any) is notified.
      *

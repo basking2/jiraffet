@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.github.basking2.jiraffet.messages.*;
-import com.github.basking2.jiraffetdb.util.VersionVoter;
+import com.github.basking2.jiraffet.util.VersionVoter;
 
 /**
  * Define how Jiraffet communicates with the outside world.

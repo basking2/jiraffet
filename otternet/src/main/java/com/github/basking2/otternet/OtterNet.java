@@ -5,9 +5,11 @@ import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
-import org.glassfish.grizzly.http.server.HttpHandler;
-import org.glassfish.grizzly.http.server.HttpServer;
-import org.glassfish.grizzly.http.server.NetworkListener;
+import com.github.basking2.otternet.http.ControlService;
+import com.github.basking2.otternet.util.App;
+import org.apache.commons.configuration2.Configuration;
+import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.glassfish.grizzly.http.server.*;
 import org.glassfish.jersey.jackson.JacksonFeature;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -17,7 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.Jiraffet;
 import com.github.basking2.jiraffet.JiraffetIOException;
-import com.github.basking2.otternet.http.JiraffetJson;
+import com.github.basking2.otternet.http.JiraffetJsonService;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import com.github.basking2.otternet.util.Ip;
@@ -36,8 +38,10 @@ public class OtterNet implements AutoCloseable {
     private OtterIO io = new OtterIO(Ip.whatsMyIp(), new ArrayList<>());
     private OtterLog log = new OtterLog(this, io);
     final Jiraffet jiraffet = new Jiraffet(log, io);
+    final App otterNetApp;
+    final Configuration config;
 
-    public static final void main(final String[] argv) throws InterruptedException, IOException {
+    public static final void main(final String[] argv) throws InterruptedException, IOException, ConfigurationException {
         final OtterNet otterNet = new OtterNet();
         
         otterNet.start();
@@ -55,12 +59,30 @@ public class OtterNet implements AutoCloseable {
         
     }
     
-    public OtterNet() {
+    public OtterNet() throws ConfigurationException {
         this.httpServer = new HttpServer();
+        this.otterNetApp = new App("otternet");
+        this.config = otterNetApp.buildConfiguration();
     }
     
     public void start() throws IOException {
-        final NetworkListener networkListener = new NetworkListener("otter", "0.0.0.0", 8765);
+        final NetworkListener networkListener =
+            new NetworkListener("otter", config.getString("otternet.addr"), config.getInt("otternet.port"));
+
+        /*
+        networkListener.setDefaultErrorPageGenerator(new ErrorPageGenerator() {
+            @Override
+            public String generate(final Request request, final int status, final String reasonPhrase, final String description, final Throwable exception) {
+                return new StringBuilder().
+                        append("<html><body>").
+                        append("<h1>").append(reasonPhrase).append("</h1>").
+                        append("<div><b>").append(description).append("</b></div>").
+                        append("<code>").append(exception).append("</code>").
+                        append("</body></html>").
+                        toString();
+            }
+        });
+        */
         
         final HttpHandler dynamicHandler = ContainerFactory.createContainer(HttpHandler.class, resourceConfig());
 
@@ -86,7 +108,8 @@ public class OtterNet implements AutoCloseable {
 
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
-        rc.register(new JiraffetJson(io, log));
+        rc.register(new JiraffetJsonService(io, log));
+        rc.register(new ControlService(io, log));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);
         rc.packages("com.github.basking2.otternet.http.scanned");
