@@ -9,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import java.net.MalformedURLException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A simplistic implementation.
@@ -22,9 +24,14 @@ public class OtterLog implements LogDao {
     /**
      * Offset of the database. This supports log compaction.
      */
-    private int offset = 0;
+    private int offset = 1;
     private List<byte[]> dataLog = new ArrayList<>();
     private List<EntryMeta> metaLog = new ArrayList<>();
+
+    /**
+     * When blobs are applied, they are linked here for fast access.
+     */
+    private Map<String, Blob> blobStorage;
 
     private final OtterNet otterNet;
     private final OtterIO io;
@@ -32,6 +39,7 @@ public class OtterLog implements LogDao {
     public OtterLog(final OtterNet otterNet, final OtterIO io) {
         this.otterNet = otterNet;
         this.io = io;
+        this.blobStorage = new HashMap<>();
 
     }
 
@@ -94,12 +102,14 @@ public class OtterLog implements LogDao {
             metaLog.add(new EntryMeta(term, offsetIndex));
         }
 
-        if (offsetIndex < dataLog.size()) {
+        else if (offsetIndex < dataLog.size()) {
             dataLog.set(offsetIndex, data);
             metaLog.set(offsetIndex, new EntryMeta(term, offsetIndex));
         }
 
-        throw new IllegalArgumentException("Cannot set arbitrary log entries in the future.");
+        else {
+            throw new IllegalArgumentException("Cannot set arbitrary log entries in the future.");
+        }
 
     }
 
@@ -133,8 +143,25 @@ public class OtterLog implements LogDao {
             case NOP_ENTRY:
                 // Nop!
                 break;
-            case APP_DATA:
-                // FIXME - write this.
+            case BLOB_ENTRY:
+                final ByteBuffer blobByteBuffer = ByteBuffer.wrap(data);
+
+                // Skip type byte.
+                blobByteBuffer.position(1);
+
+                final int blobKeyLen = blobByteBuffer.getInt();
+                final byte[] blobKeyBytes = new byte[blobKeyLen];
+                blobByteBuffer.get(blobKeyBytes);
+
+                final int blobTypeLen = blobByteBuffer.getInt();
+                final byte[] blobTypeBytes = new byte[blobTypeLen];
+                blobByteBuffer.get(blobTypeBytes);
+
+                final int blobDataLen = blobByteBuffer.getInt();
+                final byte[] blobDataBytes = new byte[blobDataLen];
+                blobByteBuffer.get(blobDataBytes);
+
+                blobStorage.put(new String(blobKeyBytes), new Blob(new String(blobTypeBytes), blobDataBytes));
                 break;
             case JOIN_ENTRY:
                 final String joinHost = new String(data, 1, data.length - 1);
@@ -166,12 +193,12 @@ public class OtterLog implements LogDao {
         int offsetIndex = index - offset;
 
         // Create a view into the logs.
-        final List dataLogView = dataLog.subList(offsetIndex, dataLog.size());
-        final List metaLogView = metaLog.subList(offsetIndex, metaLog.size());
+        final List<byte[]> dataLogView = dataLog.subList(offsetIndex, dataLog.size());
+        final List<EntryMeta> metaLogView = metaLog.subList(offsetIndex, metaLog.size());
 
         // Now create independent logs from those views, freeing the memory for the previous entries.
-        dataLog = new ArrayList(dataLogView);
-        metaLog = new ArrayList(metaLogView);
+        dataLog = new ArrayList<>(dataLogView);
+        metaLog = new ArrayList<>(metaLogView);
 
         offset = index;
     }
@@ -209,9 +236,13 @@ public class OtterLog implements LogDao {
         SNAPSHOT_ENTRY,
 
         /**
-         * Application data. This is handed off to the app processor to be integrated into the user application.
+         * A named sequence of bytes.
+         *
+         * This is encoded with the 1-byte type, then the key length, then the key in bytes.
+         * Then the type length, and the type in bytes.
+         * Then the data length, and the data in bytes.
          */
-        APP_DATA;
+        BLOB_ENTRY;
 
         public static LogEntryType fromByte(byte b) {
             if (b < 0 || b >= values().length) {
@@ -222,4 +253,33 @@ public class OtterLog implements LogDao {
         }
     }
 
+    public Blob getBlob(final String key) {
+        return blobStorage.get(key);
+    }
+
+    public static class Blob {
+        private byte[] data;
+        private String type;
+
+        public Blob(final String type, final byte[] data) {
+            this.data = data;
+            this.type = type;
+        }
+
+        public byte[] getData() {
+            return data;
+        }
+
+        public void setData(byte[] data) {
+            this.data = data;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+    }
 }

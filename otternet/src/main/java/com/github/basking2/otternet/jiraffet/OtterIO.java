@@ -74,12 +74,13 @@ public class OtterIO implements JiraffetIO {
 
     @Override
     public List<Message> getMessages(long timeout, TimeUnit timeunit)
-            throws JiraffetIOException, TimeoutException, InterruptedException {
-        ArrayList<Message> messages = new ArrayList<>();
+        throws JiraffetIOException, TimeoutException, InterruptedException
+    {
+        final ArrayList<Message> messages = new ArrayList<>();
 
-        Message m = queue.poll(timeout, timeunit);
+        final Message m = queue.poll(timeout, timeunit);
         if (m == null) {
-            return messages;
+            throw new TimeoutException("No messages received.");
         }
 
         messages.add(m);
@@ -137,11 +138,35 @@ public class OtterIO implements JiraffetIO {
         byte[] leaveRequest = new byte[1 + idBytes.length];
         leaveRequest[0] = (byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal();
 
-        ByteBuffer.wrap(leaveRequest).put(idBytes,1, idBytes.length);
+        ByteBuffer.wrap(leaveRequest).put(idBytes, 1, idBytes.length);
 
         return clientRequest(leaveRequest);
     }
 
+    public Future<ClientResponse> clientAppendBlob(final String key, final String type, final byte[] data) {
+
+        byte[] blobBytes = new byte[1 + 4 + key.getBytes().length + 4 + type.getBytes().length + 4 + data.length];
+        ByteBuffer blobByteBuffer = ByteBuffer.wrap(blobBytes);
+
+        blobByteBuffer.put((byte)OtterLog.LogEntryType.BLOB_ENTRY.ordinal());
+
+        blobByteBuffer.putInt(key.getBytes().length);
+        blobByteBuffer.put(key.getBytes());
+
+        blobByteBuffer.putInt(type.getBytes().length);
+        blobByteBuffer.put(type.getBytes());
+
+        blobByteBuffer.putInt(data.length);
+        blobByteBuffer.put(data);
+
+        return clientRequest(blobBytes);
+    }
+
+    /**
+     * Used to post to other {@link OtterIO} instances running on remote servers.
+     * @param url
+     * @param message
+     */
     private void postTo(final String url, final Message message) {
         try {
             final HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
