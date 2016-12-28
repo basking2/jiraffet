@@ -88,7 +88,7 @@ public class Jiraffet
     /**
      * @param log Where entries are committed and applied. Also it holds some persistent state such
      *            as the current term and whom we last voted for.
-     * @param io How messsages are sent to other nodes.
+     * @param io How messages are sent to other nodes.
      */
     public Jiraffet(final LogDao log, final JiraffetIO io) {
         this.io = io;
@@ -497,10 +497,17 @@ public class Jiraffet
 
             // There is no current leader.
             currentLeader = null;
-
-            io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), io.getNodeId(), log.last()));
-
-            receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
+            
+            // If we are the only node we are the leader by special base-case logic.
+            if (io.nodeCount() == 0) {
+                currentLeader = io.getNodeId();
+                mode = State.LEADER;
+                log.setVotedFor(null);
+            }
+            else {
+                io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), io.getNodeId(), log.last()));
+                receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
+            }
         }
         catch (final JiraffetIOException e) {
             LOG.error("Starting election.", e);
