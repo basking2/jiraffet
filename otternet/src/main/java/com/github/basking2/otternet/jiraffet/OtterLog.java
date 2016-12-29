@@ -23,6 +23,8 @@ public class OtterLog implements LogDao {
 
     /**
      * Offset of the database. This supports log compaction.
+     *
+     * The offset starts at 1 because there is an implicity entry 0 that signifies an empty log.
      */
     private int offset = 1;
     private List<byte[]> dataLog = new ArrayList<>();
@@ -40,7 +42,6 @@ public class OtterLog implements LogDao {
         this.otterNet = otterNet;
         this.io = io;
         this.blobStorage = new HashMap<>();
-
     }
 
     @Override
@@ -70,7 +71,7 @@ public class OtterLog implements LogDao {
             return metaLog.get(offsetIndex);
         }
 
-        return new EntryMeta(0, offset);
+        return new EntryMeta(0, 0);
     }
 
     @Override
@@ -97,6 +98,7 @@ public class OtterLog implements LogDao {
 
         final int offsetIndex = index - offset;
 
+        // Append the next item.
         if (offsetIndex == dataLog.size()) {
             dataLog.add(data);
             metaLog.add(new EntryMeta(term, offsetIndex));
@@ -215,7 +217,7 @@ public class OtterLog implements LogDao {
     @Override
     public EntryMeta last() throws JiraffetIOException {
         if (metaLog.isEmpty()) {
-            return new EntryMeta(0, offset);
+            return new EntryMeta(0, 0);
         }
 
         return metaLog.get(metaLog.size()-1);

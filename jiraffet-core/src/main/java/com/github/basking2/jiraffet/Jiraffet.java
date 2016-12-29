@@ -426,6 +426,7 @@ public class Jiraffet
         // Commit to our local store. Don't tell the client we're done yet, though.
         // Do not increment commitIndex until the majority of followers acknowledge a write.
         for (final ClientRequest clientRequest: clientRequests) {
+            LOG.info("Writing client request to {}.", commitIndex+1);
             log.write(log.getCurrentTerm(), commitIndex+1, clientRequest.getData());
         }
 

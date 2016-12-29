@@ -16,12 +16,15 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import com.github.basking2.jiraffet.Jiraffet;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.otternet.jiraffet.ClientResponse;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of Raft by Jiraffet on the local node.
@@ -33,11 +36,14 @@ import org.apache.commons.io.IOUtils;
  */
 @Path("jiraffet")
 public class JiraffetJsonService {
+    private static final Logger LOG = LoggerFactory.getLogger(JiraffetJsonService.class);
 
     private OtterIO io;
     private OtterLog log;
+    private Jiraffet jiraffet;
 
-    public JiraffetJsonService(final OtterIO io, final OtterLog log) {
+    public JiraffetJsonService(final Jiraffet jiraffet, final OtterIO io, final OtterLog log) {
+        this.jiraffet = jiraffet;
         this.io = io;
         this.log = log;
     }
@@ -124,6 +130,7 @@ public class JiraffetJsonService {
 
         final Future<ClientResponse> clientResponseFuture =  io.clientAppendBlob(key, type, data);
 
+        // FIXME - the response model is incorrect.
         return postResponse(clientResponseFuture);
 
     }
@@ -156,32 +163,37 @@ public class JiraffetJsonService {
      * @throws URISyntaxException The URI syntax is not correct for the leader.
      * @throws InterruptedException The waiting thread is interrupted.
      */
-    private Response postResponse(final Future<ClientResponse> clientResponseFuture) throws URISyntaxException, InterruptedException, ExecutionException, TimeoutException, JiraffetIOException {
-        final JoinResponse joinResponse = new JoinResponse();
+    private Response postResponse(final Future<ClientResponse> clientResponseFuture) {
+        try {
+            final JoinResponse joinResponse = new JoinResponse();
 
-        final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
+            final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
 
-        joinResponse.setLeader(clientResponse.getLeader());
-        joinResponse.setTerm(log.getCurrentTerm());
+            // Tell the client who the current leader is.
+            joinResponse.setLeader(jiraffet.getCurrentLeader());
+            joinResponse.setTerm(log.getCurrentTerm());
 
-        if (clientResponse.isSuccess()) {
-            joinResponse.setStatus(JsonResponse.OK);
-            return Response.ok(joinResponse).build();
-        }
-        else if (io.getNodeId().equals(clientResponse.getLeader())) {
-            return Response.serverError().entity(joinResponse).build();
-        }
-        else if (clientResponse.getLeader() == null) {
-            return Response.
-                    status(Response.Status.SERVICE_UNAVAILABLE).
-                    type(MediaType.TEXT_PLAIN).
-                    entity("A leader is not yet elected.").
-                    build();
-        }
-        else {
-            return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
-        }
+            if (clientResponse.isSuccess()) {
+                joinResponse.setStatus(JsonResponse.OK);
+                return Response.ok(joinResponse).build();
+            } else if (io.getNodeId().equals(clientResponse.getLeader())) {
+                return Response.serverError().entity(joinResponse).build();
+            } else if (clientResponse.getLeader() == null) {
+                return Response.
+                        status(Response.Status.SERVICE_UNAVAILABLE).
+                        type(MediaType.TEXT_PLAIN).
+                        entity("A leader is not yet elected.").
+                        build();
+            } else {
+                return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
+            }
 
+        }
+        catch (final Exception e) {
+            LOG.error(e.getMessage(), e);
+            return Response.serverError().entity(new JsonResponse(JsonResponse.ERROR, e.getMessage())).build();
+
+        }
     }
 
     /**

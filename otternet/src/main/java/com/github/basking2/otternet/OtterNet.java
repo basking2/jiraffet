@@ -172,7 +172,7 @@ public class OtterNet implements AutoCloseable {
 
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
-        rc.register(new JiraffetJsonService(io, log));
+        rc.register(new JiraffetJsonService(jiraffet, io, log));
         rc.register(new ControlService(jiraffet, io, log));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);

@@ -51,6 +51,11 @@ public class ControlService {
 
     /**
      * Instruct this node to join another cluster.
+     *
+     * @param node The node to join to and seek to be our new leader.
+     * @return The response from the target node.
+     * @throws IOException On an IO exception.
+     * @throws JiraffetIOException On a Jiraffet exception.
      */
     @GET
     @Path("join/{node}")
@@ -68,12 +73,15 @@ public class ControlService {
                     newBuilder().
                     build().
                     register(JacksonFeature.class).
-                    target(io.getNodeId()).
+                    target(node).
                     path("/jiraffet/join");
 
-            final JoinResponse r = wt.request(MediaType.APPLICATION_JSON).buildPost(
-                    Entity.entity(new JoinRequest(node), MediaType.APPLICATION_JSON)).invoke(JoinResponse.class);
+            final JoinResponse r = wt.
+                    request(MediaType.APPLICATION_JSON).
+                    buildPost(Entity.entity(new JoinRequest(io.getNodeId()), MediaType.APPLICATION_JSON)).
+                    invoke(JoinResponse.class);
 
+            LOG.info("Got response from node {}. Setting leader {} with term {}.", node, r.getLeader(), r.getTerm());
             jiraffet.setNewLeader(r.getLeader(), r.getTerm());
 
             return r;
