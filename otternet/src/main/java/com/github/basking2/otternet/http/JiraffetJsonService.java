@@ -16,6 +16,7 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.otternet.jiraffet.ClientResponse;
 import com.github.basking2.otternet.jiraffet.OtterIO;
@@ -90,7 +91,7 @@ public class JiraffetJsonService {
     @Path("join")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response postJoin(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
+    public Response postJoin(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
         final Future<ClientResponse> clientResponseFuture = io.clientRequestJoin(join.getId());
 
@@ -101,7 +102,7 @@ public class JiraffetJsonService {
     @Path("leave")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response postLeave(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
+    public Response postLeave(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
         final Future<ClientResponse> clientResponseFuture = io.clientRequestLeave(join.getId());
 
@@ -117,8 +118,7 @@ public class JiraffetJsonService {
             @HeaderParam(HttpHeaders.CONTENT_TYPE) @DefaultValue(MediaType.APPLICATION_OCTET_STREAM) final String type,
             final InputStream postBody
     )
-        throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException
-    {
+            throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
         final byte[] data = IOUtils.toByteArray(postBody);
 
@@ -156,12 +156,13 @@ public class JiraffetJsonService {
      * @throws URISyntaxException The URI syntax is not correct for the leader.
      * @throws InterruptedException The waiting thread is interrupted.
      */
-    private Response postResponse(final Future<ClientResponse> clientResponseFuture) throws URISyntaxException, InterruptedException, ExecutionException, TimeoutException {
+    private Response postResponse(final Future<ClientResponse> clientResponseFuture) throws URISyntaxException, InterruptedException, ExecutionException, TimeoutException, JiraffetIOException {
         final JoinResponse joinResponse = new JoinResponse();
 
         final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
 
         joinResponse.setLeader(clientResponse.getLeader());
+        joinResponse.setTerm(log.getCurrentTerm());
 
         if (clientResponse.isSuccess()) {
             joinResponse.setStatus(JsonResponse.OK);

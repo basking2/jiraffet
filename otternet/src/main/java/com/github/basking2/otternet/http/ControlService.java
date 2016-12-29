@@ -1,5 +1,8 @@
 package com.github.basking2.otternet.http;
 
+import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetIOException;
+import com.github.basking2.jiraffet.LogDao;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.glassfish.jersey.jackson.JacksonFeature;
@@ -26,8 +29,10 @@ public class ControlService {
     private static final Logger LOG = LoggerFactory.getLogger(ControlService.class);
     private OtterIO io;
     private OtterLog log;
+    private Jiraffet jiraffet;
 
-    public ControlService(final OtterIO io, final OtterLog log) {
+    public ControlService(final Jiraffet jiraffet, final OtterIO io, final OtterLog log) {
+        this.jiraffet = jiraffet;
         this.io = io;
         this.log = log;
     }
@@ -50,7 +55,7 @@ public class ControlService {
     @GET
     @Path("join/{node}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getJoin(@PathParam("node") final String node) throws IOException {
+    public JoinResponse getJoin(@PathParam("node") final String node) throws IOException, JiraffetIOException {
         try {
             final Map<String, String> map = new HashMap<>();
 
@@ -63,11 +68,13 @@ public class ControlService {
                     newBuilder().
                     build().
                     register(JacksonFeature.class).
-                    target(node).
+                    target(io.getNodeId()).
                     path("/jiraffet/join");
 
-            final Response r = wt.request(MediaType.APPLICATION_JSON).buildPost(
-                    Entity.entity(new JoinRequest(node), MediaType.APPLICATION_JSON)).invoke();
+            final JoinResponse r = wt.request(MediaType.APPLICATION_JSON).buildPost(
+                    Entity.entity(new JoinRequest(node), MediaType.APPLICATION_JSON)).invoke(JoinResponse.class);
+
+            jiraffet.setNewLeader(r.getLeader(), r.getTerm());
 
             return r;
         }
@@ -77,4 +84,24 @@ public class ControlService {
         }
     }
 
+    @GET
+    @Path("info")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String getInfo() throws JiraffetIOException {
+        final LogDao.EntryMeta entryMeta = log.last();
+        final StringBuilder sb = new StringBuilder()
+                .append("ID: ").append(io.getNodeId())
+                .append("\nLeader: ").append(jiraffet.getCurrentLeader())
+                .append("\nTerm: ").append(log.getCurrentTerm())
+                .append("\nVoted For: ").append(log.getVotedFor())
+                .append("\nLast Entry term/index: ").append(entryMeta.getTerm()).append("/").append(entryMeta.getIndex())
+                ;
+
+        for (final String s : io.nodes()) {
+            sb.append("\n\tNode: ").append(s);
+        }
+
+       return sb.append("\n").toString();
+
+    }
 }

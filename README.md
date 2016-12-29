@@ -61,3 +61,7 @@ Finally, the actual Raft algorithm is implemented by the `Jiraffet` class. It ti
 network and storage objects using the `JiraffetIO` class to mutate the `LogDao` data.
 
 [Raft]: https://raft.github.io
+
+## Notes
+
+  * Force a join in otternet: http://localhost:8080/control/join/http%3A%2F%2F127.0.0.1%3A8081

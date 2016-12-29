@@ -131,6 +131,8 @@ public class OtterLog implements LogDao {
     public void apply(int index) throws IllegalStateException {
         final int offsetIndex = index - offset;
 
+        LOG.info("Applying log {}.", index);
+
         final byte[] data;
 
         try {
@@ -138,6 +140,8 @@ public class OtterLog implements LogDao {
         } catch (JiraffetIOException e) {
             throw new IllegalStateException(e.getMessage(), e);
         }
+
+        LOG.info("Log entry {} is {} bytes long.", index, data.length);
 
         switch (LogEntryType.fromByte(data[0])) {
             case NOP_ENTRY:
@@ -165,6 +169,9 @@ public class OtterLog implements LogDao {
                 break;
             case JOIN_ENTRY:
                 final String joinHost = new String(data, 1, data.length - 1);
+                if (joinHost.equalsIgnoreCase(io.getNodeId())) {
+                    throw new IllegalStateException("Cannot join ourselves: "+joinHost);
+                }
                 // Remove then add to ensure no duplicates.
                 io.nodes().remove(joinHost);
                 io.nodes().add(joinHost);

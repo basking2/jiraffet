@@ -120,6 +120,8 @@ public class OtterNet implements AutoCloseable {
             id = config.getString("otter.id");
         }
 
+        LOG.info("Starting OtterNet bound to {}:{} with id {}.", ip, port, id);
+
         io = new OtterIO(id, new ArrayList<>());
         log = new OtterLog(this, io);
         jiraffet = new Jiraffet(log, io);
@@ -171,7 +173,7 @@ public class OtterNet implements AutoCloseable {
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
         rc.register(new JiraffetJsonService(io, log));
-        rc.register(new ControlService(io, log));
+        rc.register(new ControlService(jiraffet, io, log));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);
         rc.packages("com.github.basking2.otternet.http.scanned");

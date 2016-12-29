@@ -169,6 +169,20 @@ public class Jiraffet
     }
 
     /**
+     * Set a new node as a leader.
+     *
+     * This is very useful when programatically changing cluster membership.
+     */
+    public void setNewLeader(final String leaderId, int term) throws JiraffetIOException {
+        LOG.info("New leader {}.", leaderId);
+        log.setVotedFor(null);
+        log.setCurrentTerm(term);
+        mode = State.FOLLOWER;
+        currentLeader = leaderId;
+        receiveTimer.set(followerTimeoutMs);
+    }
+
+    /**
      * Invoked by leader to replicate log entries; also used as heartbeat.
      *
      * This is executed on the follower when an AppendEntriesRequest is received.
@@ -192,12 +206,7 @@ public class Jiraffet
 
             // If the term is greater, we have a new leader. Adjust things.
             if (req.getTerm() > log.getCurrentTerm()) {
-                LOG.info("New leader {}.", req.getLeaderId());
-                log.setVotedFor(null);
-                log.setCurrentTerm(req.getTerm());
-                mode = State.FOLLOWER;
-                currentLeader = req.getLeaderId();
-                receiveTimer.set(followerTimeoutMs);
+                setNewLeader(req.getLeaderId(), req.getTerm());
             }
 
             int idx = req.getPrevLogIndex();

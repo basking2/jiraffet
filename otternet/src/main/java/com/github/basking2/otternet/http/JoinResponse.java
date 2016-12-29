@@ -13,6 +13,8 @@ public class JoinResponse extends JsonResponse {
 
     private String leader;
 
+    private int term;
+
     public int getLogCompactionIndex() {
         return logCompactionIndex;
     }
@@ -27,5 +29,13 @@ public class JoinResponse extends JsonResponse {
 
     public void setLeader(String leader) {
         this.leader = leader;
+    }
+
+    public int getTerm() {
+        return term;
+    }
+
+    public void setTerm(int term) {
+        this.term = term;
     }
 }
