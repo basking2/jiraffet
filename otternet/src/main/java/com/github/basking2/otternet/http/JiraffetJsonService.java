@@ -101,7 +101,7 @@ public class JiraffetJsonService {
 
         final Future<ClientResponse> clientResponseFuture = io.clientRequestJoin(join.getId());
 
-        return postResponse(clientResponseFuture);
+        return postJoinResponse(clientResponseFuture);
     }
 
     @POST
@@ -112,7 +112,7 @@ public class JiraffetJsonService {
 
         final Future<ClientResponse> clientResponseFuture = io.clientRequestLeave(join.getId());
 
-        return postResponse(clientResponseFuture);
+        return postJoinResponse(clientResponseFuture);
     }
 
     @POST
@@ -130,8 +130,7 @@ public class JiraffetJsonService {
 
         final Future<ClientResponse> clientResponseFuture =  io.clientAppendBlob(key, type, data);
 
-        // FIXME - the response model is incorrect.
-        return postResponse(clientResponseFuture);
+        return postBlobResponse(clientResponseFuture);
 
     }
 
@@ -155,6 +154,39 @@ public class JiraffetJsonService {
         return Response.ok(blobData.getData()).type(blobData.getType()).build();
     }
 
+    private Response postBlobResponse(final Future<ClientResponse> clientResponseFuture) {
+        try {
+
+            final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
+
+            if (clientResponse.isSuccess()) {
+                return Response.ok(new JsonResponse()).build();
+            }
+            else if (io.getNodeId().equals(clientResponse.getLeader())) {
+                final JsonResponse jsonResponse = new JsonResponse();
+                jsonResponse.setStatus(JsonResponse.ERROR);
+                jsonResponse.setMessage(clientResponse.getMessage());
+                return Response.serverError().entity(jsonResponse).build();
+            }
+            else if (clientResponse.getLeader() == null) {
+                return Response.
+                        status(Response.Status.SERVICE_UNAVAILABLE).
+                        type(MediaType.TEXT_PLAIN).
+                        entity("A leader is not yet elected.").
+                        build();
+            }
+            else {
+                return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
+            }
+
+        }
+        catch (final Exception e) {
+            LOG.error(e.getMessage(), e);
+            return Response.serverError().entity(new JsonResponse(JsonResponse.ERROR, e.getMessage())).build();
+
+        }
+    }
+
     /**
      * Handle a post that involves waiting for a client response.
      *
@@ -163,7 +195,7 @@ public class JiraffetJsonService {
      * @throws URISyntaxException The URI syntax is not correct for the leader.
      * @throws InterruptedException The waiting thread is interrupted.
      */
-    private Response postResponse(final Future<ClientResponse> clientResponseFuture) {
+    private Response postJoinResponse(final Future<ClientResponse> clientResponseFuture) {
         try {
             final JoinResponse joinResponse = new JoinResponse();
 

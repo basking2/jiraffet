@@ -65,3 +65,4 @@ network and storage objects using the `JiraffetIO` class to mutate the `LogDao` 
 ## Notes
 
   * Force a join in otternet: http://localhost:8080/control/join/http%3A%2F%2F127.0.0.1%3A8081
+  * When starting from a zero-state the local, cluster-of-1, must add a "join" log entry for itself.

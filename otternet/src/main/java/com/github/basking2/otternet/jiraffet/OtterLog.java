@@ -6,6 +6,7 @@ import com.github.basking2.otternet.OtterNet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -80,10 +81,12 @@ public class OtterLog implements LogDao {
         final int offsetIndex = index - offset;
 
         if (offsetIndex >= 0 && offsetIndex < dataLog.size()) {
-            return dataLog.get(offsetIndex);
+            final byte[] data = dataLog.get(offsetIndex);
+            LOG.info("Read {} bytes from index {} (offset {}).", data.length, index, offsetIndex);
+            return data;
         }
 
-        return null;
+        throw new JiraffetIOException(new IOException("Data request out of range. Index "+index));
     }
 
     @Override
@@ -100,19 +103,22 @@ public class OtterLog implements LogDao {
 
         // Append the next item.
         if (offsetIndex == dataLog.size()) {
+            LOG.info("Added {} bytes to index {} (offset {}).", data.length, index, offsetIndex);
             dataLog.add(data);
-            metaLog.add(new EntryMeta(term, offsetIndex));
+            metaLog.add(new EntryMeta(term, index));
         }
 
         else if (offsetIndex < dataLog.size()) {
+            LOG.info("Wrote {} bytes to index {} (offset {}).", data.length, index, offsetIndex);
             dataLog.set(offsetIndex, data);
-            metaLog.set(offsetIndex, new EntryMeta(term, offsetIndex));
+            metaLog.set(offsetIndex, new EntryMeta(term, index));
         }
 
         else {
             throw new IllegalArgumentException("Cannot set arbitrary log entries in the future.");
         }
 
+        LOG.info("Database is size {}.", dataLog.size());
     }
 
     @Override
@@ -131,9 +137,6 @@ public class OtterLog implements LogDao {
 
     @Override
     public void apply(int index) throws IllegalStateException {
-        final int offsetIndex = index - offset;
-
-        LOG.info("Applying log {}.", index);
 
         final byte[] data;
 
@@ -172,11 +175,13 @@ public class OtterLog implements LogDao {
             case JOIN_ENTRY:
                 final String joinHost = new String(data, 1, data.length - 1);
                 if (joinHost.equalsIgnoreCase(io.getNodeId())) {
-                    throw new IllegalStateException("Cannot join ourselves: "+joinHost);
+                    LOG.info("Cannot join ourselves so this is implicitly applied: {}", joinHost);
                 }
-                // Remove then add to ensure no duplicates.
-                io.nodes().remove(joinHost);
-                io.nodes().add(joinHost);
+                else {
+                    // Remove then add to ensure no duplicates.
+                    io.nodes().remove(joinHost);
+                    io.nodes().add(joinHost);
+                }
                 break;
             case LEAVE_ENTRY:
                 final String leaveHost = new String(data, 1, data.length - 1);

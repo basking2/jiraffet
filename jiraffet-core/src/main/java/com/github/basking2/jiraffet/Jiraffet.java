@@ -142,30 +142,41 @@ public class Jiraffet
         // Assume they would like the very next index (they are totally up-to-date).
         // If they are not, they can correct us.
         if (!nextIndex.containsKey(id)) {
-            nextIndex.put(id, commitIndex);
+            nextIndex.put(id, commitIndex+1);
         }
 
+        // Get the most data we have and will try to commit.
+        final int largestIndex = log.last().getIndex();
+
         // Get the commit log index we would like to send to the node.
-        final int index = nextIndex.get(id);
+        final int nextExpectedIndex = nextIndex.get(id);
 
         final List<byte[]> entries;
 
-        // If we have fewer commitIndex values than another node... that is strange. Send an empty log.
-        if (commitIndex < index) {
+        // If we have fewer entries than another node then the node is up-to-date.
+        // That is, it is expecting a log yet to be created or it has un-applied entries we will replace.
+        if (largestIndex < nextExpectedIndex) {
             entries = new ArrayList<>();
         }
+
+        // Otherwise, the node needs some records.
         else {
 
-            final int entriesToSend = Math.min(LOG_ENTRY_LIMIT, commitIndex - index);
+            final int entriesToSend = Math.min(LOG_ENTRY_LIMIT, largestIndex - nextExpectedIndex + 1);
 
             entries = new ArrayList<>(entriesToSend);
 
             for (int i = 0; i < entriesToSend; ++i) {
-                entries.add(log.read(index + i));
+                entries.add(log.read(nextExpectedIndex + i));
             }
         }
 
-        return new AppendEntriesRequest(log.getCurrentTerm(), currentLeader, log.getMeta(index-1), entries, commitIndex);
+        return new AppendEntriesRequest(
+                log.getCurrentTerm(),
+                currentLeader,
+                log.getMeta(nextExpectedIndex-1),
+                entries,
+                commitIndex);
     }
 
     /**
@@ -198,7 +209,7 @@ public class Jiraffet
         if (req.getTerm() < log.getCurrentTerm()) {
             LOG.info("Rejecting log from {}. Previous term {}.", req.getLeaderId(), req.getPrevLogTerm());
             // Ignore invalid request.
-            resp = req.reject(io.getNodeId(), log.last().getIndex());
+            resp = req.reject(io.getNodeId(), log.last().getIndex()+1);
         }
 
         // If the leader knows the previous log state, we can apply this.
@@ -222,12 +233,15 @@ public class Jiraffet
 
             receiveTimer.set(followerTimeoutMs);
 
+            // Always fetch this from the log to ensure the leader didn't send us optimistic (but wrong) values.
+            final int nextCommitIndex = log.last().getIndex() + 1;
+
             LOG.info("Accepted log update from {}.", req.getLeaderId());
-            resp = req.accept(io.getNodeId());
+            resp = req.accept(io.getNodeId(), nextCommitIndex);
         }
         else {
             LOG.info("Rejecting from {}. We don't have entry term/index {}/{}.", req.getLeaderId(), req.getPrevLogTerm(), req.getPrevLogIndex());
-            resp = req.reject(io.getNodeId(), log.last().getIndex());
+            resp = req.reject(io.getNodeId(), log.last().getIndex()+1);
         }
 
         // Send response back to leader.

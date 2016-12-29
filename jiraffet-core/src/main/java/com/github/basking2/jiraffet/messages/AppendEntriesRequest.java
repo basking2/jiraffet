@@ -100,8 +100,8 @@ public class AppendEntriesRequest implements Message {
      * @param from The id of the system responding.
      * @return The response.
      */
-    public AppendEntriesResponse accept(String from) {
-        return new AppendEntriesResponse(from, getPrevLogIndex() + getEntries().size() + 1, false);
+    public AppendEntriesResponse accept(final String from, final int nextCommitIndex) {
+        return new AppendEntriesResponse(from, nextCommitIndex, false);
     }
 
     public int getPrevLogIndex() {
