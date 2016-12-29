@@ -64,6 +64,13 @@ public interface LogDao {
      * @throws IllegalStateException If the state is already applied.
      */
     void apply(int index) throws IllegalStateException;
+
+    /**
+     * Return the index of the last index that was applied.
+     *
+     * @return
+     */
+    int lastApplied();
     
     /**
      * Return the term of the last entry in the log.

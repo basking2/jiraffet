@@ -35,24 +35,24 @@ public class Jiraffet
     private LogDao log;
 
     /**
-     * The last log committed by this node.
+     * Map of what we think the followers need for their next index.
      */
-    private int commitIndex;
-
-    /**
-     * The last log entry applied to some state machine.
-     */
-    private int lastApplied;
-
     private Map<String, Integer> nextIndex;
 
+    /**
+     * Are we a leader, follower, or candidate.
+     */
     private State mode;
 
+    /**
+     * Number of votes we have.
+     */
     private int votes;
 
+    /**
+     * How we talk to others.
+     */
     private JiraffetIO io;
-
-    final VersionVoter versionVoter;
 
     /**
      * How long should the algorithm wait for messages.
@@ -92,17 +92,11 @@ public class Jiraffet
         this.io = io;
         this.log = log;
         this.mode = State.FOLLOWER;
-        this.commitIndex = 0;
-        this.lastApplied = 0;
         this.leaderTimeoutMs = 5000;
         this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
         this.nextIndex = new HashMap<>();
         this.running = false;
         this.receiveTimer = new Timer(followerTimeoutMs);
-
-        // Notice - Our version voter must require +1 nodes so as to include the leader.
-        //          A leader always implicitly votes as having comitted a value.
-        this.versionVoter = new VersionVoter(() -> io.nodeCount() + 1);
     }
 
     /**
@@ -142,7 +136,7 @@ public class Jiraffet
         // Assume they would like the very next index (they are totally up-to-date).
         // If they are not, they can correct us.
         if (!nextIndex.containsKey(id)) {
-            nextIndex.put(id, commitIndex+1);
+            nextIndex.put(id, log.last().getIndex()+1);
         }
 
         // Get the most data we have and will try to commit.
@@ -176,7 +170,7 @@ public class Jiraffet
                 currentLeader,
                 log.getMeta(nextExpectedIndex-1),
                 entries,
-                commitIndex);
+                log.last().getIndex());
     }
 
     /**
@@ -199,9 +193,10 @@ public class Jiraffet
      * This is executed on the follower when an AppendEntriesRequest is received.
      *
      * @param req The request.
+     * @returns The response.
      * @throws JiraffetIOException Any IO error.
      */
-    public void appendEntries(final AppendEntriesRequest req) throws JiraffetIOException {
+    public AppendEntriesResponse appendEntries(final AppendEntriesRequest req) throws JiraffetIOException {
 
         final AppendEntriesResponse resp;
 
@@ -225,11 +220,10 @@ public class Jiraffet
                 log.write(req.getTerm(), ++idx, entry);
             }
 
-            if (req.getLeaderCommit() > commitIndex) {
-                commitIndex = Math.min(req.getLeaderCommit(), idx);
+            // Apply all up to what the leader has committed.
+            for (int commitIndex = log.lastApplied()+1; commitIndex <= req.getLeaderCommit(); ++commitIndex) {
+                log.apply(commitIndex);
             }
-
-            applyCommitted();
 
             receiveTimer.set(followerTimeoutMs);
 
@@ -245,19 +239,7 @@ public class Jiraffet
         }
 
         // Send response back to leader.
-        io.appendEntries(req.getLeaderId(), resp);
-    }
-
-    /**
-     * The leader has just learned that a majority of nodes have committed {@link #commitIndex}.
-     *
-     * Thus, it is allowable to apply {@link #lastApplied} up to {@link #commitIndex}.
-     */
-    public void applyCommitted() {
-        // We just got new stuff. Try to update our appended progress.
-        while (commitIndex > lastApplied) {
-            log.apply(++lastApplied);
-        }
+        return resp;
     }
 
     /**
@@ -278,6 +260,7 @@ public class Jiraffet
 
     /**
      * Run the event loop.
+     *
      * @throws JiraffetIOException on any IO error.
      */
     public void run() throws JiraffetIOException
@@ -299,15 +282,7 @@ public class Jiraffet
 
                 LOG.debug("Waiting at most {} ms for messages.", receiveTimer.remainingNoThrow());
 
-                // Wait for messages or timeout.
-                final List<Message> messages = io.getMessages(receiveTimer.remaining(), TimeUnit.MILLISECONDS);
                 LOG.debug("Done waiting. Timer now {} ms.", receiveTimer.remainingNoThrow());
-
-                // If we get no messages, listen again until our timeout is reached.
-                if (messages.size() == 0) {
-                    LOG.warn("Got 0 messages from IO layer. Interpreting this as a timeout.");
-                    throw new TimeoutException("No messages returned.");
-                }
 
                 // Process all the messages we received.
                 for (final Message m : messages) {
@@ -315,66 +290,6 @@ public class Jiraffet
                     if (m instanceof ClientRequest) {
                         // Batch up messages to send, assuming nothing disrupts us.
                         clientRequests.add((ClientRequest)m);
-                        continue;
-                    }
-
-                    if (m instanceof AppendEntriesRequest) {
-                        appendEntries((AppendEntriesRequest)m);
-                        continue;
-                    }
-
-                    if (m instanceof RequestVoteRequest) {
-                        // Handle vote requests.
-                        requestVotes((RequestVoteRequest)m);
-                        continue;
-                    }
-
-                    // We are a candidate and get a response.
-                    if (m instanceof RequestVoteResponse) {
-                        final RequestVoteResponse req = (RequestVoteResponse) m;
-
-                        // If we are a candidate and got a vote.
-                        if (mode == State.CANDIDATE && req.isVoteGranted()){
-
-                            votes++;
-
-                            // Should we win the election.
-                            if (votes > io.nodeCount() / 2) {
-                                LOG.info("Node {} believes itself the leader for term {}.", io.getNodeId(), log.getCurrentTerm());
-                                currentLeader = io.getNodeId();
-                                mode = State.LEADER;
-                                log.setVotedFor(null);
-
-                                // Heartbeat.
-                                appendEntries(new ArrayList<>(0));
-
-                                // Use the shorter leader timeout to heartbeat.
-                                receiveTimer.set(leaderTimeoutMs);
-                            }
-                        }
-
-                        continue;
-                    }
-
-                    if (m instanceof AppendEntriesResponse) {
-                        final AppendEntriesResponse req = (AppendEntriesResponse) m;
-
-                        switch (mode) {
-                        case LEADER:
-
-                            LOG.debug("Node {}'s next commit is {}.", req.getFrom(), req.getNextCommitIndex());
-
-                            // Update the next index.
-                            nextIndex.put(req.getFrom(), req.getNextCommitIndex());
-
-                            // Update the vote totals which may trigger other updates.
-                            versionVoter.vote(req.getNextCommitIndex()-1);
-
-                            break;
-                        default:
-                            // Nop. We are not the leader. We ignore this.
-                        }
-
                         continue;
                     }
 
@@ -399,7 +314,7 @@ public class Jiraffet
                 switch (mode) {
                 case LEADER:
                     LOG.debug("Timeout. Sending heartbeats.");
-                    appendEntries(clientRequests);
+                    handleClientRequests(clientRequests);
                     break;
                 case FOLLOWER:
                 case CANDIDATE:
@@ -414,7 +329,7 @@ public class Jiraffet
     private void handleClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
         switch (mode){
         case LEADER:
-            appendEntries(clientRequests);
+            appendClientRequests(clientRequests);
             break;
         case FOLLOWER:
         case CANDIDATE:
@@ -427,61 +342,96 @@ public class Jiraffet
     }
 
     /**
-     * If we are a leader, append these entries to our local log and replicate out.
+     * If we are a leader, commit these logs to other nodes and then commit them locally and apply them.
      *
      * @param clientRequests Requests from the client on this machine.
      * @throws JiraffetIOException On any error.
      */
-    private void appendEntries(final List<ClientRequest> clientRequests) throws JiraffetIOException {
+    private void appendClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
 
         // Set the timer first to avoid a timeout.
         receiveTimer.set(leaderTimeoutMs);
 
-        // Commit to our local store. Don't tell the client we're done yet, though.
-        // Do not increment commitIndex until the majority of followers acknowledge a write.
-        for (final ClientRequest clientRequest: clientRequests) {
-            LOG.info("Writing client request to {}.", commitIndex+1);
-            log.write(log.getCurrentTerm(), commitIndex+1, clientRequest.getData());
-        }
+        // For every node we know about, build a request list.
+        final List<String> nodes = io.nodes();
+        final List<AppendEntriesRequest> requests = new ArrayList<>(nodes.size());
 
-        // Only listen for commits if we have added new data. Client requests can be zero when heart beating.
-        if (clientRequests.size() > 0) {
+        final int lastIndex = log.last().getIndex();
 
-            // Set what we do when this version is committed.
-            // NOTE: It is possible, in a very lagged deployment, for there to be many
-            // versions that become current and having many versionVoter listeners would give us
-            // more fine-grained progress. We do not assume this is the normal situation.
-            //
-            // The assumption in this is that the system will be mostly-consistent at all times.
-            versionVoter.setListener(commitIndex + clientRequests.size(), (ver, succ) -> {
+        for (final String node : nodes) {
+            final int nextExpectedIndex = nextIndex.get(node);
+            final EntryMeta previousMeta = log.getMeta(nextExpectedIndex-1);
+            final List<byte[]> entries = new ArrayList<>();
 
-                String clientMsg = "";
-                boolean clientSucc = succ;
-
-                if (succ) {
-                    // If this version won an election, we know it is committed and safe to apply.
-                    commitIndex = ver;
-
-                    // Apply committed stuff op to commitIndex.
-                    applyCommitted();
-
-                    // FIXME - if there was a problem applying the message, change clientSucc and clientMsg.
+            // If we don't think the follower is caught up.
+            if (nextExpectedIndex < lastIndex) {
+                // If the follower is not caught up, attempt to catch them up with this message.
+                for (int i = nextExpectedIndex; i <= lastIndex && entries.size() < LOG_ENTRY_LIMIT; ++i) {
+                    entries.add(log.read(i));
                 }
+            }
 
-                // Tell the clients we've finished their request.
+            // If the client can be caught up with the current list of entries, include the client requests.
+            if (previousMeta.getIndex() + entries.size() == lastIndex) {
                 for (final ClientRequest cr : clientRequests) {
-                    cr.complete(clientSucc, currentLeader, clientMsg);
+                    entries.add(cr.getData());
                 }
-            });
+            }
 
-            // We have a vote. :)
-            versionVoter.vote(commitIndex + clientRequests.size());
+            // Add the final request to our list of messages to send.
+            requests.add(
+                new AppendEntriesRequest(
+                    log.getCurrentTerm(),
+                    currentLeader,
+                    previousMeta.getIndex(),
+                    previousMeta.getTerm(),
+                    entries,
+                    lastIndex
+                )
+            );
         }
 
-        // Send to all nodes in the cluster their update.
-        for (final String id : io.nodes()) {
-            final AppendEntriesRequest req = appendEntries(id);
-            io.appendEntries(id, req);
+        // Do the IO.
+        final List<AppendEntriesResponse> responses = io.appendEntries(nodes, requests);
+
+        // Collect all the known next indexes and votes.
+        int votes = 0;
+        for (final AppendEntriesResponse response: responses) {
+            nextIndex.put(response.getFrom(), response.getNextCommitIndex());
+
+            // If the client expects data after what this will be when we write to our log, vote.
+            if (lastIndex + clientRequests.size() < response.getNextCommitIndex()) {
+                votes++;
+            }
+        }
+
+        int index = lastIndex;
+        int currentTerm = log.getCurrentTerm();
+
+        // The followers all have a copy. Lets persist what we have and tell the user.
+        for (final ClientRequest cr: clientRequests) {
+            index++;
+            log.write(currentTerm, index, cr.getData());
+        }
+
+
+        // Finally, tally the votes.
+        if (votes + 1 > (io.nodeCount()+1)/2) {
+
+            // Apply everything we replicated.
+            for (int i = log.lastApplied()+1; i < index; ++i) {
+                log.apply(index);
+            }
+
+            // Tell the user the good news.
+            for (ClientRequest cr: clientRequests) {
+                cr.complete(true, currentLeader, "");
+            }
+        }
+        else {
+            for (ClientRequest cr: clientRequests) {
+                cr.complete(false, currentLeader, "replication");
+            }
         }
     }
 
@@ -531,7 +481,6 @@ public class Jiraffet
             // votes = 1, we vote for ourselves.
             votes = 1;
             log.setVotedFor(io.getNodeId());
-            versionVoter.clear();
 
             // There is no current leader.
             currentLeader = null;
@@ -543,8 +492,25 @@ public class Jiraffet
                 log.setVotedFor(null);
             }
             else {
-                io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), io.getNodeId(), log.last()));
-                receiveTimer.set((long)(Math.random()*leaderTimeoutMs));
+                final List<RequestVoteResponse> voteResps = io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), io.getNodeId(), log.last()));
+                for (final RequestVoteResponse voteResp : voteResps) {
+                    if (voteResp.isVoteGranted()) {
+                        votes++;
+                    }
+                }
+
+                if (votes > (io.nodeCount() + 1)/ 2) {
+                    LOG.info("Node {} believes itself the leader for term {}.", io.getNodeId(), log.getCurrentTerm());
+                    currentLeader = io.getNodeId();
+                    mode = State.LEADER;
+                    log.setVotedFor(null);
+
+                    // Heartbeat.
+                    appendClientRequests(new ArrayList<>(0));
+
+                    // Use the shorter leader timeout to heartbeat.
+                    receiveTimer.set(leaderTimeoutMs);
+                }
             }
         }
         catch (final JiraffetIOException e) {
@@ -557,15 +523,14 @@ public class Jiraffet
      *
      * @param req A request for votes received from our IO layer.
      */
-    public void requestVotes(final RequestVoteRequest req) {
+    public RequestVoteResponse requestVotes(final RequestVoteRequest req) throws JiraffetIOException {
         try {
             final String candidateId = req.getCandidateId();
             
             // If it's an old term, reject.
             if (req.getTerm() <= log.getCurrentTerm()) {
                 LOG.debug("Rejecting vote request from {} term {}.", req.getCandidateId(), req.getTerm());
-                io.requestVotes(candidateId, req.reject());
-                return;
+                return req.reject();
             }
             
             final EntryMeta lastLog = log.last();
@@ -574,20 +539,22 @@ public class Jiraffet
             if (log.getVotedFor() == null || req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
                 LOG.debug("Voting for {} term {}.", req.getCandidateId(), req.getTerm());
                 // If we get here, well, vote!
-                io.requestVotes(candidateId, req.vote());
                 log.setVotedFor(req.getCandidateId());
 
                 // If we vote for them, reset the timeout and continue.
                 receiveTimer.set(followerTimeoutMs);
+
+                return req.vote();
             }
             else {
                 LOG.debug("Rejecting vote request from {} term {} log term {} log idx {}.", new Object[]{req.getCandidateId(), req.getTerm(), req.getLastLogTerm(), req.getLastLogIndex()});
                 // If the potential leader does not have at LEAST our last log entry, reject.
-                io.requestVotes(candidateId, req.reject());
+                return req.reject();
             }
         }
         catch (final JiraffetIOException e) {
             LOG.error("Casting vote.", e);
+            throw e;
         }
     }
 
