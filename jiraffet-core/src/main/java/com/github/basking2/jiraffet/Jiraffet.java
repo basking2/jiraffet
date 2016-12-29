@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.github.basking2.jiraffet.messages.*;
@@ -13,7 +12,6 @@ import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.LogDao.EntryMeta;
 import com.github.basking2.jiraffet.util.Timer;
-import com.github.basking2.jiraffet.util.VersionVoter;
 
 /**
  * An instance of the Raft algorithm.
@@ -92,10 +90,10 @@ public class Jiraffet
         this.io = io;
         this.log = log;
         this.mode = State.FOLLOWER;
-        this.leaderTimeoutMs = 5000;
-        this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
         this.nextIndex = new HashMap<>();
         this.running = false;
+        this.leaderTimeoutMs = 5000;
+        this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
         this.receiveTimer = new Timer(followerTimeoutMs);
     }
 
@@ -284,20 +282,6 @@ public class Jiraffet
 
                 LOG.debug("Done waiting. Timer now {} ms.", receiveTimer.remainingNoThrow());
 
-                // Process all the messages we received.
-                for (final Message m : messages) {
-
-                    if (m instanceof ClientRequest) {
-                        // Batch up messages to send, assuming nothing disrupts us.
-                        clientRequests.add((ClientRequest)m);
-                        continue;
-                    }
-
-                    // Sanity check.
-                    throw new RuntimeException("We got a message we do not know how to handle: "+m);
-
-                } // after for-messages loop.
-
                 // Note: We do not check our timer but rely on it to throw a TimeoutException at which point
                 //       heartbeats are sent.
                 if (clientRequests.size() > 0) {
@@ -307,6 +291,7 @@ public class Jiraffet
             catch (final JiraffetIOException e) {
                 LOG.error("Event loop", e);
             }
+            /*
             catch (final InterruptedException e) {
                 LOG.error("Interrupted exception in event loop", e);
             }
@@ -323,10 +308,18 @@ public class Jiraffet
                     break;
                 }
             }
+            */
         }
     }
 
-    private void handleClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
+    /**
+     * Just send a heartbeat.
+     */
+    public void heartBeat() throws JiraffetIOException {
+        handleClientRequests(new ArrayList<>(0));
+    }
+
+     public void handleClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
         switch (mode){
         case LEADER:
             appendClientRequests(clientRequests);
@@ -436,37 +429,6 @@ public class Jiraffet
     }
 
     /**
-     * Invoked by candidates to gather votes.
-     *
-     * This is the follower side of the function.
-     *
-     * @param req The request received from a candidate.
-     * @return Return the result that should be sent back to the client.
-     * @throws JiraffetIOException on any error.
-     */
-    public RequestVoteResponse requestVote(final RequestVoteRequest req) throws JiraffetIOException
-    {
-        // Candidate is requesting a vote for a passed term. Reject.
-        if (req.getTerm() < log.getCurrentTerm()) {
-            return req.reject();
-        }
-
-        // If we've voted for someone else.
-        if (log.getVotedFor() != null && !log.getVotedFor().equalsIgnoreCase(req.getCandidateId())) {
-            return req.reject();
-        }
-
-        // Is the candidate's log at least as up-to-date as our log?
-        final LogDao.EntryMeta lastLog = log.last();
-        if (req.getLastLogIndex() < lastLog.getIndex() || req.getLastLogTerm() < lastLog.getTerm()) {
-            return req.reject();
-        }
-
-        return req.vote();
-
-    }
-
-    /**
      * Send a {@link RequestVoteRequest} to all. We have not heard anything from a leader in some timeout.
      */
     public void startElection() {
@@ -529,7 +491,7 @@ public class Jiraffet
             
             // If it's an old term, reject.
             if (req.getTerm() <= log.getCurrentTerm()) {
-                LOG.debug("Rejecting vote request from {} term {}.", req.getCandidateId(), req.getTerm());
+                LOG.debug("Rejecting vote request from {} term {}.", candidateId, req.getTerm());
                 return req.reject();
             }
             
@@ -537,9 +499,9 @@ public class Jiraffet
             
             // If the candidate asking for our vote has logs in the future, we will vote for them.
             if (log.getVotedFor() == null || req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
-                LOG.debug("Voting for {} term {}.", req.getCandidateId(), req.getTerm());
+                LOG.debug("Voting for {} term {}.", candidateId, req.getTerm());
                 // If we get here, well, vote!
-                log.setVotedFor(req.getCandidateId());
+                log.setVotedFor(candidateId);
 
                 // If we vote for them, reset the timeout and continue.
                 receiveTimer.set(followerTimeoutMs);
@@ -547,7 +509,7 @@ public class Jiraffet
                 return req.vote();
             }
             else {
-                LOG.debug("Rejecting vote request from {} term {} log term {} log idx {}.", new Object[]{req.getCandidateId(), req.getTerm(), req.getLastLogTerm(), req.getLastLogIndex()});
+                LOG.debug("Rejecting vote request from {} term {} log term {} log idx {}.", new Object[]{candidateId, req.getTerm(), req.getLastLogTerm(), req.getLastLogIndex()});
                 // If the potential leader does not have at LEAST our last log entry, reject.
                 return req.reject();
             }
