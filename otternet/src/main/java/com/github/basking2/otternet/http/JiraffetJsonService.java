@@ -112,14 +112,14 @@ public class JiraffetJsonService {
             @HeaderParam(HttpHeaders.CONTENT_TYPE) @DefaultValue(MediaType.APPLICATION_OCTET_STREAM) final String type,
             final InputStream postBody
     )
-            throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
+            throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException
+    {
 
         final byte[] data = IOUtils.toByteArray(postBody);
 
         final Future<ClientResponse> clientResponseFuture =  access.clientAppendBlob(key, type, data);
 
         return postBlobResponse(clientResponseFuture);
-
     }
 
     @GET

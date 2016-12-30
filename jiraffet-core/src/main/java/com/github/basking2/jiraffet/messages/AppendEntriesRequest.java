@@ -102,7 +102,7 @@ public class AppendEntriesRequest implements Message {
      * @return The response.
      */
     public AppendEntriesResponse accept(final String from, final int nextCommitIndex) {
-        return new AppendEntriesResponse(from, nextCommitIndex, false);
+        return new AppendEntriesResponse(from, nextCommitIndex, true);
     }
 
     public int getPrevLogIndex() {

@@ -153,7 +153,7 @@ public class Jiraffet
 
         final AppendEntriesResponse resp;
 
-        // If the leader and term match, try to do this. Reset the timeout to the full value.
+        // If the leader and term match, try to do this.
         if (req.getTerm() < log.getCurrentTerm()) {
             LOG.info("Rejecting log from {}. Previous term {}.", req.getLeaderId(), req.getPrevLogTerm());
             // Ignore invalid request.
