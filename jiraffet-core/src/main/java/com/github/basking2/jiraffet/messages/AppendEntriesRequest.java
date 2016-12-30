@@ -98,6 +98,7 @@ public class AppendEntriesRequest implements Message {
      * Accept the response with the next index set to prevLogIndex + entries + 1.
      *
      * @param from The id of the system responding.
+     * @param nextCommitIndex The next index this node wants.
      * @return The response.
      */
     public AppendEntriesResponse accept(final String from, final int nextCommitIndex) {

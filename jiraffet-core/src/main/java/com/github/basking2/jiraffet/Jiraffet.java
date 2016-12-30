@@ -175,6 +175,10 @@ public class Jiraffet
      * Set a new node as a leader.
      *
      * This is very useful when programatically changing cluster membership.
+     *
+     * @param leaderId The new leader's ID.
+     * @param term The term this leader is presiding over.
+     * @throws JiraffetIOException Any error.
      */
     public void setNewLeader(final String leaderId, int term) throws JiraffetIOException {
         LOG.info("New leader {}.", leaderId);
@@ -191,7 +195,7 @@ public class Jiraffet
      * This is executed on the follower when an AppendEntriesRequest is received.
      *
      * @param req The request.
-     * @returns The response.
+     * @return The response.
      * @throws JiraffetIOException Any IO error.
      */
     public AppendEntriesResponse appendEntries(final AppendEntriesRequest req) throws JiraffetIOException {
@@ -314,6 +318,7 @@ public class Jiraffet
 
     /**
      * Just send a heartbeat.
+     * @throws JiraffetIOException on errors.
      */
     public void heartBeat() throws JiraffetIOException {
         handleClientRequests(new ArrayList<>(0));
@@ -392,28 +397,27 @@ public class Jiraffet
         for (final AppendEntriesResponse response: responses) {
             nextIndex.put(response.getFrom(), response.getNextCommitIndex());
 
-            // If the client expects data after what this will be when we write to our log, vote.
-            if (lastIndex + clientRequests.size() < response.getNextCommitIndex()) {
+            // If the request is a success and then follower expects data more than our log will eventually hold, vote!
+            if (response.isSuccess() && lastIndex + clientRequests.size() < response.getNextCommitIndex()) {
                 votes++;
             }
         }
 
-        int index = lastIndex;
-        int currentTerm = log.getCurrentTerm();
-
-        // The followers all have a copy. Lets persist what we have and tell the user.
-        for (final ClientRequest cr: clientRequests) {
-            index++;
-            log.write(currentTerm, index, cr.getData());
-        }
-
-
-        // Finally, tally the votes.
+        // If enough clients replicated the log, we will write it, apply it, and
+        // on the next follower communication, notify them to apply the log.
         if (votes + 1 > (io.nodeCount()+1)/2) {
+            int index = lastIndex;
+            final int currentTerm = log.getCurrentTerm();
+
+            // The followers all have a copy. Lets persist what we have and tell the user.
+            for (final ClientRequest cr: clientRequests) {
+                index++;
+                log.write(currentTerm, index, cr.getData());
+            }
 
             // Apply everything we replicated.
             for (int i = log.lastApplied()+1; i < index; ++i) {
-                log.apply(index);
+                log.apply(i);
             }
 
             // Tell the user the good news.
@@ -484,6 +488,8 @@ public class Jiraffet
      * Send a {@link RequestVoteResponse} in respose to req.
      *
      * @param req A request for votes received from our IO layer.
+     * @return The vote response.
+     * @throws JiraffetIOException on errors.
      */
     public RequestVoteResponse requestVotes(final RequestVoteRequest req) throws JiraffetIOException {
         try {

@@ -1,10 +1,7 @@
 package com.github.basking2.jiraffet;
 
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +31,16 @@ public class JiraffetAccess {
     private ScheduledExecutorService scheduledExecutorService;
 
     /**
+     * Periodically wake up and send heartbeats of things have been quiet.
+     */
+    private Callable<Void> leaderHeartbeats;
+
+    /**
+     * Periodically wake up and become the leader if we haven't heared from a leader in a while.
+     */
+    private Callable<Void> followerElections;
+
+    /**
      * The epoch ({@link System#currentTimeMillis()}) since something last happened that would reset a timer.
      */
     private volatile long lastActivity;
@@ -58,46 +65,117 @@ public class JiraffetAccess {
         this.log = log;
         this.leaderTimeoutMs = 5000L;
         this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
+        this.leaderHeartbeats = buildLeaderHeartbeats();
+        this.followerElections = buildFollowerElections();
+    }
+
+    private Callable<Void> buildLeaderHeartbeats() {
+        return new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                if (!running) {
+                    throw new Exception("Not running!");
+                }
+
+                synchronized (jiraffet) {
+
+                    if (!jiraffet.isLeader()) {
+                        scheduleAsFollower();
+                        throw new Exception("We are not the leader!");
+                    }
+
+                    // If the leader timeout has expired, send heartbeats.
+                    if (System.currentTimeMillis() - lastActivity >= leaderTimeoutMs) {
+                        heartbeats();
+                    }
+
+                    final long sinceLastActivity = System.currentTimeMillis() - lastActivity;
+                    scheduledExecutorService.schedule(this, leaderTimeoutMs - sinceLastActivity, TimeUnit.MILLISECONDS);
+                }
+
+                return null;
+            }
+        };
+    }
+
+    private Callable<Void> buildFollowerElections() {
+        return new Callable<Void>(){
+            @Override
+            public Void call() throws Exception {
+                if (!running) {
+                    throw new Exception("Not running!");
+                }
+
+                synchronized (jiraffet) {
+                    // If we are the leader, abort.
+                    if (jiraffet.isLeader()) {
+                        scheduleAsLeader();
+                        throw new Exception("We are not a follower!");
+                    }
+
+                    // No leader has talked to us in quite a while. Let's try to become the leader!
+                    if (System.currentTimeMillis() - lastActivity >= followerTimeoutMs) {
+                        try {
+                            jiraffet.startElection();
+                        }
+                        catch (final Exception e) {
+                            LOG.error("Starting election.", e);
+                        }
+
+                        // If we became the leader, schedule that work!
+                        if (jiraffet.isLeader()) {
+                            scheduleAsLeader();
+                        }
+                        else {
+                            // Retry after a random sleep.
+                            long sleep = 0;
+                            do {
+                                sleep = (long) (Math.random() * followerTimeoutMs);
+                            } while (sleep == 0);
+
+                            scheduledExecutorService.schedule(this, sleep, TimeUnit.MILLISECONDS);
+                        }
+                    }
+                }
+
+                return null;
+            }
+        };
     }
     
     public void start() {
         running = true;
         lastActivity = System.currentTimeMillis();
-        
-        scheduledExecutorService.
+        scheduleAsFollower();
+    }
 
-        // FIXME - adhere to timer resets from requestVotes() and appendEntries().
-        while (running) {
-            receiveTimer.waitRemaining();
-
-            synchronized(jiraffet) {
-                // If we are the leader, reset.
-                if (jiraffet.isLeader()) {
-                    try {
-                        jiraffet.heartBeat();
-                    }
-                    catch (final JiraffetIOException e) {
-                        LOG.error(e.getMessage(), e);
-                    }
-
-                    receiveTimer.reset();
-                }
-                // If we are the follower and we haven't gotten any heart beats etc...
-                else if (System.currentTimeMillis() - lastActivity > receiveTimer.get()) {
-
-                    // FIXME - we need to know if we win the election and how long to sleep if we do.
-                    jiraffet.startElection();
-                }
-            }
-        }
+    public void stop() {
+        running = false;
     }
     
     private void scheduleAsFollower() {
-        // FIXME - handle this, on timeout do an election. 
+        scheduledExecutorService.schedule(followerElections, followerTimeoutMs, TimeUnit.MILLISECONDS);
     }
 
     private void scheduleAsLeader() {
-        // FIXME - handle this, do heart beats.
+        heartbeats();
+
+        scheduledExecutorService.schedule(leaderHeartbeats, leaderTimeoutMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Send heartbeats. Only call if we are the leader.
+     */
+    public void heartbeats() {
+        synchronized (jiraffet) {
+            try {
+                lastActivity = System.currentTimeMillis();
+                jiraffet.heartBeat();
+            }
+            catch (final Exception e) {
+                LOG.error("Sending heartbeats.", e);
+            }
+        }
     }
 
     /**
@@ -132,12 +210,13 @@ public class JiraffetAccess {
     /**
      * Submit new data.
      *
-     * @param requests
+     * @param requests The client's requests.
      *
-     * @throws JiraffetIOException
+     * @throws JiraffetIOException on errors.
      */
     public void append(final List<ClientRequest> requests) throws JiraffetIOException {
         synchronized (jiraffet) {
+            lastActivity = System.currentTimeMillis();
             jiraffet.handleClientRequests(requests);
         }
     }

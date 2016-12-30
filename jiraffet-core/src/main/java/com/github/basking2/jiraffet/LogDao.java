@@ -68,7 +68,7 @@ public interface LogDao {
     /**
      * Return the index of the last index that was applied.
      *
-     * @return
+     * @return The last index applied.
      */
     int lastApplied();
     

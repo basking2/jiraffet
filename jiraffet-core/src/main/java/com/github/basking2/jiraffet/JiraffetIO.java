@@ -18,6 +18,7 @@ public interface JiraffetIO extends VersionVoter.NodeCounter
      * Send the given vote request to all nodes and collect the responses.
      *
      * @param req The Jiraffet vote request.
+     * @return The responses.
      * @throws JiraffetIOException On any error.
      */
     List<RequestVoteResponse> requestVotes(RequestVoteRequest req) throws JiraffetIOException;
@@ -27,6 +28,7 @@ public interface JiraffetIO extends VersionVoter.NodeCounter
      *
      * @param id The id we are sending to.
      * @param req The request.
+     * @return The responses.
      * @throws JiraffetIOException On any IO exception.
      */
     List<AppendEntriesResponse> appendEntries(List<String> id, List<AppendEntriesRequest> req) throws JiraffetIOException;
