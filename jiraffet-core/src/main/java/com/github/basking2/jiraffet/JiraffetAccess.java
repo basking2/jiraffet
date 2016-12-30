@@ -1,6 +1,10 @@
 package com.github.basking2.jiraffet;
 
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,7 +14,6 @@ import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
 import com.github.basking2.jiraffet.messages.ClientRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
-import com.github.basking2.jiraffet.util.Timer;
 
 /**
  * This class ties together the logic, the storage, and the communication pieces of JiraffetAccess.
@@ -27,27 +30,41 @@ public class JiraffetAccess {
 
     private long leaderTimeoutMs;
     private long followerTimeoutMs;
-    private Timer receiveTimer;
     private boolean running;
+    private ScheduledExecutorService scheduledExecutorService;
 
     /**
      * The epoch ({@link System#currentTimeMillis()}) since something last happened that would reset a timer.
      */
     private volatile long lastActivity;
 
-    public JiraffetAccess(final Jiraffet jiraffet, final JiraffetIO io, final LogDao log, final Timer followerTimer, final Timer leaderTimer) {
+    public JiraffetAccess(
+            final Jiraffet jiraffet,
+            final JiraffetIO io,
+            final LogDao log
+    ) {
+        this(jiraffet, io, log, Executors.newSingleThreadScheduledExecutor());
+    }
+
+    public JiraffetAccess(
+            final Jiraffet jiraffet,
+            final JiraffetIO io,
+            final LogDao log,
+            final ScheduledExecutorService scheduledExecutorService
+    ) {
+        this.scheduledExecutorService = scheduledExecutorService;
         this.jiraffet = jiraffet;
         this.io = io;
         this.log = log;
-
         this.leaderTimeoutMs = 5000L;
         this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
-        this.receiveTimer = new Timer(followerTimeoutMs);
     }
-
-    public void run() {
+    
+    public void start() {
         running = true;
         lastActivity = System.currentTimeMillis();
+        
+        scheduledExecutorService.
 
         // FIXME - adhere to timer resets from requestVotes() and appendEntries().
         while (running) {
@@ -73,6 +90,14 @@ public class JiraffetAccess {
                 }
             }
         }
+    }
+    
+    private void scheduleAsFollower() {
+        // FIXME - handle this, on timeout do an election. 
+    }
+
+    private void scheduleAsLeader() {
+        // FIXME - handle this, do heart beats.
     }
 
     /**
