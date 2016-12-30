@@ -62,6 +62,10 @@ public class Timer {
     public void set() {
         reset();
     }
+    
+    public long get() {
+        return timeout;
+    }
 
     /**
      * Record the system time at which time timer will  have expired, effectively starting the timer.

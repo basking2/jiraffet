@@ -1,11 +1,16 @@
 package com.github.basking2.jiraffet;
 
-import com.github.basking2.jiraffet.messages.*;
-import com.github.basking2.jiraffet.util.Timer;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
+import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
+import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
+import com.github.basking2.jiraffet.messages.ClientRequest;
+import com.github.basking2.jiraffet.messages.RequestVoteRequest;
+import com.github.basking2.jiraffet.messages.RequestVoteResponse;
+import com.github.basking2.jiraffet.util.Timer;
 
 /**
  * This class ties together the logic, the storage, and the communication pieces of JiraffetAccess.
@@ -25,6 +30,11 @@ public class JiraffetAccess {
     private Timer receiveTimer;
     private boolean running;
 
+    /**
+     * The epoch ({@link System#currentTimeMillis()}) since something last happened that would reset a timer.
+     */
+    private volatile long lastActivity;
+
     public JiraffetAccess(final Jiraffet jiraffet, final JiraffetIO io, final LogDao log, final Timer followerTimer, final Timer leaderTimer) {
         this.jiraffet = jiraffet;
         this.io = io;
@@ -37,19 +47,28 @@ public class JiraffetAccess {
 
     public void run() {
         running = true;
+        lastActivity = System.currentTimeMillis();
 
         // FIXME - adhere to timer resets from requestVotes() and appendEntries().
         while (running) {
             receiveTimer.waitRemaining();
 
-            synchronized (jiraffet) {
+            synchronized(jiraffet) {
+                // If we are the leader, reset.
                 if (jiraffet.isLeader()) {
                     try {
                         jiraffet.heartBeat();
-                    } catch (final JiraffetIOException e) {
+                    }
+                    catch (final JiraffetIOException e) {
                         LOG.error(e.getMessage(), e);
                     }
-                } else {
+
+                    receiveTimer.reset();
+                }
+                // If we are the follower and we haven't gotten any heart beats etc...
+                else if (System.currentTimeMillis() - lastActivity > receiveTimer.get()) {
+
+                    // FIXME - we need to know if we win the election and how long to sleep if we do.
                     jiraffet.startElection();
                 }
             }
@@ -64,16 +83,24 @@ public class JiraffetAccess {
      * @throws JiraffetIOException On errors.
      */
     public RequestVoteResponse requestVotes(final RequestVoteRequest request) throws JiraffetIOException {
-        // FIXME - reset timer.
         synchronized (jiraffet) {
-            return jiraffet.requestVotes(request);
+            final RequestVoteResponse r = jiraffet.requestVotes(request);
+            lastActivity = System.currentTimeMillis();
+            return r;
         }
     }
 
+    /**
+     * If another node, a leader, asks us to append entries.
+     * @param request The requested entries to add.
+     * @return The response.
+     * @throws JiraffetIOException On any errors.
+     */
     public AppendEntriesResponse appendEntries(final AppendEntriesRequest request) throws JiraffetIOException {
-        // FIXME - reset timer.
         synchronized (jiraffet) {
-            return jiraffet.appendEntries(request);
+            final AppendEntriesResponse r = jiraffet.appendEntries(request);
+            lastActivity = System.currentTimeMillis();
+            return r;
         }
     }
 
