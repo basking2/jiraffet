@@ -119,7 +119,7 @@ public class JiraffetJsonService {
 
         final Future<ClientResponse> clientResponseFuture =  access.clientAppendBlob(key, type, data);
 
-        return postBlobResponse(clientResponseFuture);
+        return postBlobResponse(clientResponseFuture, key);
     }
 
     @GET
@@ -142,7 +142,7 @@ public class JiraffetJsonService {
         return Response.ok(blobData.getData()).type(blobData.getType()).build();
     }
 
-    private Response postBlobResponse(final Future<ClientResponse> clientResponseFuture) {
+    private Response postBlobResponse(final Future<ClientResponse> clientResponseFuture, final String key) {
         try {
 
             final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
@@ -164,7 +164,7 @@ public class JiraffetJsonService {
                         build();
             }
             else {
-                return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
+                return Response.temporaryRedirect(new URI(clientResponse.getLeader()+"/jiraffet/blob/"+key)).build();
             }
 
         }
@@ -205,7 +205,7 @@ public class JiraffetJsonService {
                         entity("A leader is not yet elected.").
                         build();
             } else {
-                return Response.temporaryRedirect(new URI(clientResponse.getLeader())).build();
+                return Response.temporaryRedirect(new URI(clientResponse.getLeader() + "/jiraffet/join")).build();
             }
 
         }
