@@ -95,7 +95,7 @@ public class Jiraffet
         // Get the commit log index we would like to send to the node.
         final int nextExpectedIndex = nextIndex.get(id);
 
-        final List<byte[]> entries;
+        final List<LogEntry> entries;
 
         // If we have fewer entries than another node then the node is up-to-date.
         // That is, it is expecting a log yet to be created or it has un-applied entries we will replace.
@@ -111,7 +111,7 @@ public class Jiraffet
             entries = new ArrayList<>(entriesToSend);
 
             for (int i = 0; i < entriesToSend; ++i) {
-                entries.add(log.read(nextExpectedIndex + i));
+                entries.add(log.getLogEntry(nextExpectedIndex+i));
             }
         }
 
@@ -168,9 +168,8 @@ public class Jiraffet
                 setNewLeader(req.getLeaderId(), req.getTerm());
             }
 
-            int idx = req.getPrevLogIndex();
-            for (byte[] entry : req.getEntries()) {
-                log.write(req.getTerm(), ++idx, entry);
+            for (LogEntry entry : req.getEntries()) {
+                log.write(entry.getTerm(), entry.getIndex(), entry.getData());
             }
 
             // Pick the leader's commit index or the last entry in our log, which ever is smaller.
@@ -265,20 +264,22 @@ public class Jiraffet
             final int nextExpectedIndex = nextIndex.get(node);
 
             final EntryMeta previousMeta = log.getMeta(nextExpectedIndex-1);
-            final List<byte[]> entries = new ArrayList<>();
+            final List<LogEntry> entries = new ArrayList<>();
 
             // If we don't think the follower is caught up.
             if (nextExpectedIndex <= lastIndex) {
                 // If the follower is not caught up, attempt to catch them up with this message.
                 for (int i = nextExpectedIndex; i <= lastIndex && entries.size() < LOG_ENTRY_LIMIT; ++i) {
-                    entries.add(log.read(i));
+                    entries.add(log.getLogEntry(i));
                 }
             }
 
             // If the client can be caught up with the current list of entries, include the client requests.
             if (previousMeta.getIndex() + entries.size() == lastIndex) {
+                int index = log.last().getIndex();
                 for (final ClientRequest cr : clientRequests) {
-                    entries.add(cr.getData());
+                    final LogEntry logEntry = new LogEntry(++index, log.getCurrentTerm(), cr.getData());
+                    entries.add(logEntry);
                 }
             }
 

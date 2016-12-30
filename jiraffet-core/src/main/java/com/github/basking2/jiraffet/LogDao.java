@@ -1,5 +1,7 @@
 package com.github.basking2.jiraffet;
 
+import com.github.basking2.jiraffet.messages.LogEntry;
+
 /**
  * The Raft Log entry.
  */
@@ -80,6 +82,10 @@ public interface LogDao {
      * @return The metadata for the last entry in the log. This should never be null.
      */
     EntryMeta last() throws JiraffetIOException;
+
+    default LogEntry getLogEntry(final int index) throws JiraffetIOException {
+        return new LogEntry(index, getMeta(index).getTerm(), read(index));
+    }
 
     class EntryMeta {
         private int term;

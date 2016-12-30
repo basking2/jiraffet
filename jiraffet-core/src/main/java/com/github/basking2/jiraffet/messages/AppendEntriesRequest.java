@@ -10,7 +10,7 @@ public class AppendEntriesRequest implements Message {
     private String leaderId;
     private int prevLogIndex;
     private int prevLogTerm;
-    private List<byte[]> entries;
+    private List<LogEntry> entries;
     private int leaderCommit;
 
     public AppendEntriesRequest() {
@@ -21,7 +21,7 @@ public class AppendEntriesRequest implements Message {
             int term,
             String leaderId,
             LogDao.EntryMeta prevLogTerm,
-            List<byte[]> entries,
+            List<LogEntry> entries,
             int leaderCommit
     ) {
         this(term, leaderId, prevLogTerm.getIndex(), prevLogTerm.getTerm(), entries, leaderCommit);
@@ -32,7 +32,7 @@ public class AppendEntriesRequest implements Message {
             String leaderId,
             int prevLogIndex,
             int prevLogTerm,
-            List<byte[]> entries,
+            List<LogEntry> entries,
             int leaderCommit
     ) {
         this.term = term;
@@ -67,11 +67,11 @@ public class AppendEntriesRequest implements Message {
         this.prevLogTerm = prevLogTerm;
     }
 
-    public List<byte[]> getEntries() {
+    public List<LogEntry> getEntries() {
         return entries;
     }
 
-    public void setEntries(List<byte[]> entries) {
+    public void setEntries(List<LogEntry> entries) {
         this.entries = entries;
     }
 
