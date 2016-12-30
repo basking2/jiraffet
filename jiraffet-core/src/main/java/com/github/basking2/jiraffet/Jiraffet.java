@@ -173,8 +173,11 @@ public class Jiraffet
                 log.write(req.getTerm(), ++idx, entry);
             }
 
-            // Apply all up to what the leader has committed.
-            for (int commitIndex = log.lastApplied()+1; commitIndex <= req.getLeaderCommit(); ++commitIndex) {
+            // Pick the leader's commit index or the last entry in our log, which ever is smaller.
+            final int commitLimit = Math.min(req.getLeaderCommit(), log.last().getIndex());
+
+            // Apply all up to what the leader has committed up to the maximum we have in our log.
+            for (int commitIndex = log.lastApplied()+1; commitIndex <= commitLimit; ++commitIndex) {
                 log.apply(commitIndex);
             }
 
@@ -265,7 +268,7 @@ public class Jiraffet
             final List<byte[]> entries = new ArrayList<>();
 
             // If we don't think the follower is caught up.
-            if (nextExpectedIndex < lastIndex) {
+            if (nextExpectedIndex <= lastIndex) {
                 // If the follower is not caught up, attempt to catch them up with this message.
                 for (int i = nextExpectedIndex; i <= lastIndex && entries.size() < LOG_ENTRY_LIMIT; ++i) {
                     entries.add(log.read(i));
@@ -319,7 +322,7 @@ public class Jiraffet
             }
 
             // Apply everything we replicated.
-            for (int i = log.lastApplied()+1; i < index; ++i) {
+            for (int i = log.lastApplied()+1; i <= index; ++i) {
                 log.apply(i);
             }
 
