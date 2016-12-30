@@ -45,6 +45,7 @@ public class OtterLog implements LogDao {
         this.io = io;
         this.lastApplied = 0;
         this.blobStorage = new HashMap<>();
+        this.votedFor = "";
     }
 
     @Override

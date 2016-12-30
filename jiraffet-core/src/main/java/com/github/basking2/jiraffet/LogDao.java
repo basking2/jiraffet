@@ -31,6 +31,7 @@ public interface LogDao {
 
     /**
      * @return Who we voted for. This should be reset when a new leader establishes themselves / the term changes.
+     *         This should not return null, but the empty string if no leader is known.
      * @throws JiraffetIOException On any error.
      */
     String getVotedFor() throws JiraffetIOException;

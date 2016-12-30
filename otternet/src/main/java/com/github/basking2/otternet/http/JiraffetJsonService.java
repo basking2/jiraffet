@@ -156,7 +156,7 @@ public class JiraffetJsonService {
                 jsonResponse.setMessage(clientResponse.getMessage());
                 return Response.serverError().entity(jsonResponse).build();
             }
-            else if (clientResponse.getLeader() == null) {
+            else if (clientResponse.getLeader() == null || clientResponse.getLeader().isEmpty()) {
                 return Response.
                         status(Response.Status.SERVICE_UNAVAILABLE).
                         type(MediaType.TEXT_PLAIN).
