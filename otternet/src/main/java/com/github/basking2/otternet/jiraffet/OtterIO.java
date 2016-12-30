@@ -1,22 +1,15 @@
 package com.github.basking2.otternet.jiraffet;
 
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.*;
 
 import org.glassfish.jersey.jackson.JacksonFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonGenerationException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.basking2.jiraffet.JiraffetIO;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
@@ -26,16 +19,12 @@ import com.github.basking2.jiraffet.messages.Message;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 
-import javax.ws.rs.ProcessingException;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
-import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 public class OtterIO implements JiraffetIO {
     
-    private final ObjectMapper objectMapper;
     private final List<String> nodes;
     private final String nodeId;
     private final BlockingQueue<Message> queue;
@@ -48,7 +37,6 @@ public class OtterIO implements JiraffetIO {
         this.nodeId = nodeId;
         this.nodes = nodes;
         this.queue = new LinkedBlockingQueue<>();
-        this.objectMapper = new ObjectMapper();
     }
 
     @Override
@@ -57,45 +45,47 @@ public class OtterIO implements JiraffetIO {
     }
 
     @Override
-    public void requestVotes(RequestVoteRequest req) throws JiraffetIOException {
+    public List<RequestVoteResponse> requestVotes(RequestVoteRequest req) throws JiraffetIOException {
+        final List<RequestVoteResponse> responses = new ArrayList<>(nodes.size());
+
         for (final String node : nodes) {
-            postTo(node, "/jiraffet/vote/request", req);
-        }
-    }
 
-    @Override
-    public void requestVotes(String candidateId, RequestVoteResponse req) throws JiraffetIOException {
-        postTo(candidateId, "/jiraffet/vote/response", req);
-    }
+            final RequestVoteResponse r = ClientBuilder.newBuilder().build().register(JacksonFeature.class).
+                    target(node).
+                    path("/jiraffet/vote/request").
+                    request(MediaType.APPLICATION_JSON).
+                    buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).
+                    invoke(RequestVoteResponse.class);
 
-    @Override
-    public void appendEntries(String id, AppendEntriesRequest req) throws JiraffetIOException {
-        for (final String node : nodes) {
-            postTo(node, "/jiraffet/append/request", req);
-        }
-    }
-
-    @Override
-    public void appendEntries(String id, AppendEntriesResponse resp) throws JiraffetIOException {
-        postTo(id, "/jiraffet/append/response", resp);
-    }
-
-    @Override
-    public List<Message> getMessages(long timeout, TimeUnit timeunit)
-        throws JiraffetIOException, TimeoutException, InterruptedException
-    {
-        final ArrayList<Message> messages = new ArrayList<>();
-
-        final Message m = queue.poll(timeout, timeunit);
-        if (m == null) {
-            throw new TimeoutException("No messages received.");
+            responses.add(r);
         }
 
-        messages.add(m);
+        return responses;
+    }
 
-        queue.drainTo(messages);
-        
-        return messages;
+    @Override
+    public List<AppendEntriesResponse> appendEntries(List<String> id, List<AppendEntriesRequest> req) throws JiraffetIOException {
+        final List<AppendEntriesResponse> responses = new ArrayList<>(nodes.size());
+
+        final Iterator<String> idItr = id.iterator();
+        final Iterator<AppendEntriesRequest> reqItr = req.iterator();
+
+        while (idItr.hasNext() && reqItr.hasNext()) {
+            final String node = idItr.next();
+            final AppendEntriesRequest request = reqItr.next();
+
+            final AppendEntriesResponse r = ClientBuilder.newBuilder().build().register(JacksonFeature.class).
+                    target(node).
+                    path("/jiraffet/append/request").
+                    request(MediaType.APPLICATION_JSON).
+                    buildPost(Entity.entity(request, MediaType.APPLICATION_JSON)).
+                    invoke(AppendEntriesResponse.class);
+
+            responses.add(r);
+        }
+
+
+        return responses;
     }
 
     @Override
@@ -106,105 +96,5 @@ public class OtterIO implements JiraffetIO {
     @Override
     public List<String> nodes() {
         return nodes;
-    }
-
-    @Override
-    public void clientRequest(List<ClientRequest> clientRequests) {
-        queue.addAll(clientRequests);
-    }
-
-    public Future<ClientResponse> clientRequest(final byte[] message) {
-        final CompletableFuture<ClientResponse> future = new CompletableFuture<>();
-
-        queue.add(new ClientRequest() {
-            @Override
-            public byte[] getData() {
-                return message;
-            }
-
-            @Override
-            public void complete(boolean success, String leader, String msg) {
-                future.complete(new ClientResponse(success, leader, msg));
-            }
-        });
-
-        return future;
-    }
-
-    public Future<ClientResponse> clientRequestJoin(final String id) {
-        byte[] idBytes = id.getBytes();
-        byte[] joinRequest = new byte[1 + idBytes.length];
-
-        ByteBuffer.
-                wrap(joinRequest).
-                put((byte) OtterLog.LogEntryType.JOIN_ENTRY.ordinal()).
-                put(idBytes, 0, idBytes.length);
-
-        return clientRequest(joinRequest);
-    }
-
-    public Future<ClientResponse> clientRequestLeave(final String id) {
-        byte[] idBytes = id.getBytes();
-        byte[] leaveRequest = new byte[1 + idBytes.length];
-        leaveRequest[0] = (byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal();
-
-        ByteBuffer.
-                wrap(leaveRequest).
-                put((byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal()).
-                put(idBytes, 1, idBytes.length);
-
-        return clientRequest(leaveRequest);
-    }
-
-    public Future<ClientResponse> clientAppendBlob(final String key, final String type, final byte[] data) {
-
-        byte[] blobBytes = new byte[1 + 4 + key.getBytes().length + 4 + type.getBytes().length + 4 + data.length];
-        ByteBuffer blobByteBuffer = ByteBuffer.wrap(blobBytes);
-
-        blobByteBuffer.put((byte)OtterLog.LogEntryType.BLOB_ENTRY.ordinal());
-
-        blobByteBuffer.putInt(key.getBytes().length);
-        blobByteBuffer.put(key.getBytes());
-
-        blobByteBuffer.putInt(type.getBytes().length);
-        blobByteBuffer.put(type.getBytes());
-
-        blobByteBuffer.putInt(data.length);
-        blobByteBuffer.put(data);
-
-        return clientRequest(blobBytes);
-    }
-
-    /**
-     * Used to post to other {@link OtterIO} instances running on remote servers.
-     * @param host
-     * @param path
-     * @param message
-     */
-    private void postTo(final String host, final String path, final Message message) {
-        try {
-            final WebTarget wt = ClientBuilder.
-                    newBuilder().
-                    build().
-                    register(JacksonFeature.class).
-                    target(host).
-                    path(path);
-
-            final Response r = wt.
-                    request().
-                    buildPost(Entity.entity(message, MediaType.APPLICATION_JSON)).
-                    invoke();
-
-            if (r.getStatus() >= 300) {
-                LOG.error("Unexpected status: {}", r.getStatus());
-            }
-        }
-        catch (final ProcessingException t) {
-            LOG.error("Posting to {} path {}.", host, path, t);
-        }
-    }
-
-    public void add(final Message msg) {
-        queue.add(msg);
     }
 }

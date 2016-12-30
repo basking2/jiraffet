@@ -6,6 +6,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import com.github.basking2.otternet.http.ControlService;
+import com.github.basking2.otternet.jiraffet.OtterAccess;
 import com.github.basking2.otternet.util.App;
 import org.apache.commons.cli.*;
 import org.apache.commons.configuration2.Configuration;
@@ -19,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetAccess;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.otternet.http.JiraffetJsonService;
 import com.github.basking2.otternet.jiraffet.OtterIO;
@@ -40,6 +42,7 @@ public class OtterNet implements AutoCloseable {
     final private OtterIO io;
     final private OtterLog log;
     final private Jiraffet jiraffet;
+    final private OtterAccess access;
     final private Configuration config;
 
     public static final void main(final String[] argv) throws InterruptedException, IOException, ConfigurationException, ParseException {
@@ -125,6 +128,7 @@ public class OtterNet implements AutoCloseable {
         io = new OtterIO(id, new ArrayList<>());
         log = new OtterLog(this, io);
         jiraffet = new Jiraffet(log, io);
+        access = new OtterAccess(jiraffet, io, log);
         httpServer = new HttpServer();
 
         final NetworkListener networkListener = new NetworkListener("otter", ip, port);
@@ -158,9 +162,9 @@ public class OtterNet implements AutoCloseable {
 
         final Thread jiraffetThread = new Thread(() -> {
                 try {
-                    jiraffet.run();
+                    access.start();
                 } catch (JiraffetIOException e) {
-                    e.printStackTrace();
+                    LOG.error("Starting.", e);
                 }
                 return;
             });
@@ -172,7 +176,7 @@ public class OtterNet implements AutoCloseable {
 
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
-        rc.register(new JiraffetJsonService(jiraffet, io, log));
+        rc.register(new JiraffetJsonService(access, jiraffet, io, log));
         rc.register(new ControlService(jiraffet, io, log));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);
@@ -191,7 +195,7 @@ public class OtterNet implements AutoCloseable {
         }
 
         try {
-            jiraffet.shutdown();
+            access.stop();
         }
         catch (final Throwable t) {
             // Nop.

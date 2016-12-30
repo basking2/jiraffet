@@ -52,34 +52,11 @@ public class Jiraffet
      */
     private JiraffetIO io;
 
-    /**
-     * How long should the algorithm wait for messages.
-     *
-     * If messages are received before this, it is an algorithmic choice what the timer value should be.
-     * Should it decrease or be reset?
-     */
-    private Timer receiveTimer;
-
-    /**
-     * Is the service running?
-     */
-    private volatile boolean running;
-
     enum State {
         CANDIDATE,
         FOLLOWER,
         LEADER
     };
-
-    /**
-     * Timeout after which a follower will seek to be elected.
-     */
-    private long followerTimeoutMs;
-
-    /**
-     * Timeout after which a leader should send a heartbeat to prevent an election.
-     */
-    private long leaderTimeoutMs;
 
     /**
      * @param log Where entries are committed and applied. Also it holds some persistent state such
@@ -91,32 +68,7 @@ public class Jiraffet
         this.log = log;
         this.mode = State.FOLLOWER;
         this.nextIndex = new HashMap<>();
-        this.running = false;
-        this.leaderTimeoutMs = 5000;
-        this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
-        this.receiveTimer = new Timer(followerTimeoutMs);
-    }
-
-    /**
-     * Set the timeout for the leader nodes. This should be somehwat shorter.
-     * 
-     * @see #setFollowerTimeout(long)
-     * 
-     * @param timeout The timeout in milliseconds.
-     */
-    public void setLeaderTimeout(final long timeout) {
-        this.leaderTimeoutMs = timeout;
-    }
-    
-    /**
-     * Set the follower timeout. This should be twice the size of the leader timeout.
-     * 
-     * @see #setLeaderTimeout(long)
-     * 
-     * @param timeout The timeout in milliseconds.
-     */
-    public void setFollowerTimeout(final long timeout) {
-        this.followerTimeoutMs = timeout;
+        this.currentLeader = "";
     }
 
     /**
@@ -186,7 +138,6 @@ public class Jiraffet
         log.setCurrentTerm(term);
         mode = State.FOLLOWER;
         currentLeader = leaderId;
-        receiveTimer.set(followerTimeoutMs);
     }
 
     /**
@@ -227,8 +178,6 @@ public class Jiraffet
                 log.apply(commitIndex);
             }
 
-            receiveTimer.set(followerTimeoutMs);
-
             // Always fetch this from the log to ensure the leader didn't send us optimistic (but wrong) values.
             final int nextCommitIndex = log.last().getIndex() + 1;
 
@@ -256,64 +205,15 @@ public class Jiraffet
         }
     }
 
-    public void shutdown() {
-        running = false;
-    }
-
     /**
      * Run the event loop.
      *
      * @throws JiraffetIOException on any IO error.
      */
-    public void run() throws JiraffetIOException
+    public void start() throws JiraffetIOException
     {
-        running = true;
         mode = State.FOLLOWER;
         currentLeader = log.getVotedFor();
-
-        // How long should we wait for messages before we consider things timed out.
-        receiveTimer = new Timer(followerTimeoutMs);
-
-        while (running) {
-
-            // Two lists for handling client requests.
-            // If a message makes it into here, we think we are the leader and will try to handle it.
-            final List<ClientRequest> clientRequests = new ArrayList<>();
-
-            try {
-
-                LOG.debug("Waiting at most {} ms for messages.", receiveTimer.remainingNoThrow());
-
-                LOG.debug("Done waiting. Timer now {} ms.", receiveTimer.remainingNoThrow());
-
-                // Note: We do not check our timer but rely on it to throw a TimeoutException at which point
-                //       heartbeats are sent.
-                if (clientRequests.size() > 0) {
-                    handleClientRequests(clientRequests);
-                }
-            }
-            catch (final JiraffetIOException e) {
-                LOG.error("Event loop", e);
-            }
-            /*
-            catch (final InterruptedException e) {
-                LOG.error("Interrupted exception in event loop", e);
-            }
-            catch (final TimeoutException e) {
-                switch (mode) {
-                case LEADER:
-                    LOG.debug("Timeout. Sending heartbeats.");
-                    handleClientRequests(clientRequests);
-                    break;
-                case FOLLOWER:
-                case CANDIDATE:
-                    LOG.debug("Timeout. Starting an election.");
-                    startElection();
-                    break;
-                }
-            }
-            */
-        }
     }
 
     /**
@@ -347,9 +247,6 @@ public class Jiraffet
      */
     private void appendClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
 
-        // Set the timer first to avoid a timeout.
-        receiveTimer.set(leaderTimeoutMs);
-
         // For every node we know about, build a request list.
         final List<String> nodes = io.nodes();
         final List<AppendEntriesRequest> requests = new ArrayList<>(nodes.size());
@@ -357,7 +254,13 @@ public class Jiraffet
         final int lastIndex = log.last().getIndex();
 
         for (final String node : nodes) {
+
+            if (!nextIndex.containsKey(node)) {
+                nextIndex.put(node, log.last().getIndex() + 1);
+            }
+
             final int nextExpectedIndex = nextIndex.get(node);
+
             final EntryMeta previousMeta = log.getMeta(nextExpectedIndex-1);
             final List<byte[]> entries = new ArrayList<>();
 
@@ -475,7 +378,6 @@ public class Jiraffet
                     appendClientRequests(new ArrayList<>(0));
 
                     // Use the shorter leader timeout to heartbeat.
-                    receiveTimer.set(leaderTimeoutMs);
                 }
             }
         }
@@ -509,9 +411,6 @@ public class Jiraffet
                 // If we get here, well, vote!
                 log.setVotedFor(candidateId);
 
-                // If we vote for them, reset the timeout and continue.
-                receiveTimer.set(followerTimeoutMs);
-
                 return req.vote();
             }
             else {
@@ -536,6 +435,12 @@ public class Jiraffet
     }
 
     public boolean isLeader() {
-        return getCurrentLeader().equals(io.getNodeId());
+        final String currentLeader = getCurrentLeader();
+
+        if (currentLeader == null) {
+            return false;
+        }
+
+        return currentLeader.equals(io.getNodeId());
     }
 }

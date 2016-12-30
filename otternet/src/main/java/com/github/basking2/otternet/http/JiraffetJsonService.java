@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -17,9 +18,11 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetAccess;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.otternet.jiraffet.ClientResponse;
+import com.github.basking2.otternet.jiraffet.OtterAccess;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.apache.commons.io.IOUtils;
@@ -41,11 +44,13 @@ public class JiraffetJsonService {
     private OtterIO io;
     private OtterLog log;
     private Jiraffet jiraffet;
+    private OtterAccess access;
 
-    public JiraffetJsonService(final Jiraffet jiraffet, final OtterIO io, final OtterLog log) {
+    public JiraffetJsonService(final OtterAccess access, final Jiraffet jiraffet, final OtterIO io, final OtterLog log) {
         this.jiraffet = jiraffet;
         this.io = io;
         this.log = log;
+        this.access = access;
     }
 
     @GET
@@ -61,36 +66,19 @@ public class JiraffetJsonService {
     
 
     @POST
-    @Path("vote/response")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Object postVoteReponse(final RequestVoteResponse msg) {
-        io.add(msg);
-        return response("OK");
-    }
-    
-    @POST
     @Path("vote/request")
     @Produces(MediaType.APPLICATION_JSON)
-    public Object postVoteRequest(final RequestVoteRequest msg) {
-        io.add(msg);
-        return response("OK");
+    @Consumes(MediaType.APPLICATION_JSON)
+    public RequestVoteResponse postVoteRequest(final RequestVoteRequest msg) throws JiraffetIOException {
+        return access.requestVotes(msg);
     }
     
     @POST
     @Path("append/request")
     @Produces(MediaType.APPLICATION_JSON)
-    public Object postAppendRequest(final AppendEntriesRequest msg) {
-        io.add(msg);
-        return response("OK");
-    }
-
-    @POST
-    @Path("append/response")
-    @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Object postAppendResponse(final AppendEntriesResponse msg) {
-        io.add(msg);
-        return response("OK");
+    public AppendEntriesResponse postAppendRequest(final AppendEntriesRequest msg) throws JiraffetIOException {
+        return access.appendEntries(msg);
     }
 
     @POST
@@ -99,7 +87,7 @@ public class JiraffetJsonService {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response postJoin(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
-        final Future<ClientResponse> clientResponseFuture = io.clientRequestJoin(join.getId());
+        final Future<ClientResponse> clientResponseFuture = access.clientRequestJoin(join.getId());
 
         return postJoinResponse(clientResponseFuture);
     }
@@ -110,7 +98,7 @@ public class JiraffetJsonService {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response postLeave(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
-        final Future<ClientResponse> clientResponseFuture = io.clientRequestLeave(join.getId());
+        final Future<ClientResponse> clientResponseFuture = access.clientRequestLeave(join.getId());
 
         return postJoinResponse(clientResponseFuture);
     }
@@ -128,7 +116,7 @@ public class JiraffetJsonService {
 
         final byte[] data = IOUtils.toByteArray(postBody);
 
-        final Future<ClientResponse> clientResponseFuture =  io.clientAppendBlob(key, type, data);
+        final Future<ClientResponse> clientResponseFuture =  access.clientAppendBlob(key, type, data);
 
         return postBlobResponse(clientResponseFuture);
 

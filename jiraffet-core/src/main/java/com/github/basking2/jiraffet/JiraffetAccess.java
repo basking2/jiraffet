@@ -73,6 +73,7 @@ public class JiraffetAccess {
         return new Callable<Void>() {
             @Override
             public Void call() throws Exception {
+                LOG.info("Leader heartbeat.");
                 if (!running) {
                     throw new Exception("Not running!");
                 }
@@ -83,6 +84,8 @@ public class JiraffetAccess {
                         scheduleAsFollower();
                         throw new Exception("We are not the leader!");
                     }
+
+                    LOG.info("No activity for {} ms.", System.currentTimeMillis() - lastActivity);
 
                     // If the leader timeout has expired, send heartbeats.
                     if (System.currentTimeMillis() - lastActivity >= leaderTimeoutMs) {
@@ -102,7 +105,9 @@ public class JiraffetAccess {
         return new Callable<Void>(){
             @Override
             public Void call() throws Exception {
+                LOG.info("Follower election check.");
                 if (!running) {
+                    LOG.info("Not running! Follower check exiting.");
                     throw new Exception("Not running!");
                 }
 
@@ -112,6 +117,8 @@ public class JiraffetAccess {
                         scheduleAsLeader();
                         throw new Exception("We are not a follower!");
                     }
+
+                    LOG.info("Last activity {} ms ago.", System.currentTimeMillis() - lastActivity);
 
                     // No leader has talked to us in quite a while. Let's try to become the leader!
                     if (System.currentTimeMillis() - lastActivity >= followerTimeoutMs) {
@@ -143,7 +150,8 @@ public class JiraffetAccess {
         };
     }
     
-    public void start() {
+    public void start() throws JiraffetIOException {
+        jiraffet.start();
         running = true;
         lastActivity = System.currentTimeMillis();
         scheduleAsFollower();
@@ -154,10 +162,13 @@ public class JiraffetAccess {
     }
     
     private void scheduleAsFollower() {
+        LOG.info("Scheduing follower check in {} ms.", followerTimeoutMs);
         scheduledExecutorService.schedule(followerElections, followerTimeoutMs, TimeUnit.MILLISECONDS);
     }
 
     private void scheduleAsLeader() {
+        LOG.info("Scheduling leader heartbeats.");
+
         heartbeats();
 
         scheduledExecutorService.schedule(leaderHeartbeats, leaderTimeoutMs, TimeUnit.MILLISECONDS);

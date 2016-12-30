@@ -20,6 +20,7 @@ import java.util.Map;
 public class OtterLog implements LogDao {
     private static final Logger LOG = LoggerFactory.getLogger(OtterLog.class);
     private int currentTerm;
+    private int lastApplied;
     private String votedFor;
 
     /**
@@ -42,6 +43,7 @@ public class OtterLog implements LogDao {
     public OtterLog(final OtterNet otterNet, final OtterIO io) {
         this.otterNet = otterNet;
         this.io = io;
+        this.lastApplied = 0;
         this.blobStorage = new HashMap<>();
     }
 
@@ -147,6 +149,10 @@ public class OtterLog implements LogDao {
         }
 
         LOG.info("Log entry {} is {} bytes long.", index, data.length);
+
+        if (lastApplied < index) {
+            lastApplied = index;
+        }
 
         switch (LogEntryType.fromByte(data[0])) {
             case NOP_ENTRY:
@@ -297,5 +303,10 @@ public class OtterLog implements LogDao {
         public void setType(String type) {
             this.type = type;
         }
+    }
+
+    @Override
+    public int lastApplied() {
+        return lastApplied;
     }
 }
