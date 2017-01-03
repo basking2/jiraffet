@@ -1,11 +1,13 @@
 package com.github.basking2.otternet.jiraffet;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.*;
 
+import com.github.basking2.otternet.util.Futures;
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
 import org.glassfish.jersey.jackson.JacksonFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +16,6 @@ import com.github.basking2.jiraffet.JiraffetIO;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
 import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
-import com.github.basking2.jiraffet.messages.ClientRequest;
 import com.github.basking2.jiraffet.messages.Message;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
@@ -27,16 +28,60 @@ public class OtterIO implements JiraffetIO {
     
     private final List<String> nodes;
     private final String nodeId;
-    private final BlockingQueue<Message> queue;
     private static final Logger LOG = LoggerFactory.getLogger(OtterIO.class);
-    
+
+    private final ExecutorService executorService;
+
+    /**
+     * How OtterNet wants to build a client.
+     */
+    private final ClientConfig clientBuilderConfiguration;
+
+    /**
+     * Constructor that creates an independent thread pool for IO operation.
+     *
+     * Since IO typically blocks its calling thread, it is not expected that these threads will overly burden the
+     * CPUs on a system, and so may exist along side other {@link ExecutorService}s that use other thread pools.
+     * The waste involved in this approach is that Threads do block out a call stack of memory and
+     * take up time in the CPU scheduler.
+     *
+     * There is another constructor that allows the user to provide their own {@link ExecutorService}.
+     *
+     * The executor is created by {@link Executors#newCachedThreadPool()}.
+     *
+     * @param nodeId This node's network ID. Typically {@code http://myhost:myport}.
+     * @param nodes A list of node IDs we can connect too.
+     *
+     * @see #OtterIO(String, List, ExecutorService)
+     */
     public OtterIO(
             final String nodeId,
             final List<String> nodes
+    )
+    {
+        this(nodeId, nodes, Executors.newCachedThreadPool());
+    }
+
+    /**
+     * Constructor that provides the user access to defining the {@link ExecutorService}.
+     *
+     * @param nodeId This node's network ID. Typically {@code http://myhost:myport}.
+     * @param nodes A list of node IDs we can connect too.
+     * @param executorService The executor service that will be used for IO operation.
+     */
+    public OtterIO(
+            final String nodeId,
+            final List<String> nodes,
+            final ExecutorService executorService
     ) {
         this.nodeId = nodeId;
         this.nodes = nodes;
-        this.queue = new LinkedBlockingQueue<>();
+        this.executorService = executorService;
+
+        this.clientBuilderConfiguration = new ClientConfig().
+            property(ClientProperties.READ_TIMEOUT, 1000).
+            property(ClientProperties.CONNECT_TIMEOUT, 1000).
+            register(JacksonFeature.class);
     }
 
     @Override
@@ -45,27 +90,39 @@ public class OtterIO implements JiraffetIO {
     }
 
     @Override
-    public List<RequestVoteResponse> requestVotes(RequestVoteRequest req) throws JiraffetIOException {
+    public List<RequestVoteResponse> requestVotes(final RequestVoteRequest req) throws JiraffetIOException {
         final List<RequestVoteResponse> responses = new ArrayList<>(nodes.size());
+        final List<Future<RequestVoteResponse>> responseFutures = new ArrayList<>(nodes.size());
 
+        // Build futures list.
         for (final String node : nodes) {
-
-            final RequestVoteResponse r = ClientBuilder.newBuilder().build().register(JacksonFeature.class).
-                    target(node).
-                    path("/jiraffet/vote/request").
-                    request(MediaType.APPLICATION_JSON).
-                    buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).
-                    invoke(RequestVoteResponse.class);
-
-            responses.add(r);
+            responseFutures.add(requestVoteFuture(req, node));
         }
 
+        // Collect futures.
+        Futures.getAll(responseFutures, responses, 5, TimeUnit.SECONDS);
+
         return responses;
+    }
+
+    private Future<RequestVoteResponse> requestVoteFuture(final RequestVoteRequest req, final String node) throws JiraffetIOException {
+        return executorService.submit(new Callable<RequestVoteResponse>() {
+            @Override
+            public RequestVoteResponse call() throws Exception {
+                return ClientBuilder.newClient(clientBuilderConfiguration).
+                        target(node).
+                        path("/jiraffet/vote/request").
+                        request(MediaType.APPLICATION_JSON).
+                        buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).
+                        invoke(RequestVoteResponse.class);
+            }
+        });
     }
 
     @Override
     public List<AppendEntriesResponse> appendEntries(List<String> id, List<AppendEntriesRequest> req) throws JiraffetIOException {
         final List<AppendEntriesResponse> responses = new ArrayList<>(nodes.size());
+        final List<Future<AppendEntriesResponse>> responsesFutures = new ArrayList<>(nodes.size());
 
         final Iterator<String> idItr = id.iterator();
         final Iterator<AppendEntriesRequest> reqItr = req.iterator();
@@ -74,18 +131,27 @@ public class OtterIO implements JiraffetIO {
             final String node = idItr.next();
             final AppendEntriesRequest request = reqItr.next();
 
-            final AppendEntriesResponse r = ClientBuilder.newBuilder().build().register(JacksonFeature.class).
-                    target(node).
-                    path("/jiraffet/append/request").
-                    request(MediaType.APPLICATION_JSON).
-                    buildPost(Entity.entity(request, MediaType.APPLICATION_JSON)).
-                    invoke(AppendEntriesResponse.class);
-
-            responses.add(r);
+            responsesFutures.add(appendEntriesResponseFuture(request, node));
         }
 
+        Futures.getAll(responsesFutures, responses, 5, TimeUnit.SECONDS);
 
         return responses;
+    }
+
+    private Future<AppendEntriesResponse> appendEntriesResponseFuture(final AppendEntriesRequest req, final String node) {
+        return executorService.submit(new Callable<AppendEntriesResponse>() {
+
+            @Override
+            public AppendEntriesResponse call() throws Exception {
+                return ClientBuilder.newClient(clientBuilderConfiguration).
+                        target(node).
+                        path("/jiraffet/append/request").
+                        request(MediaType.APPLICATION_JSON).
+                        buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).
+                        invoke(AppendEntriesResponse.class);
+            }
+        });
     }
 
     @Override
@@ -97,4 +163,5 @@ public class OtterIO implements JiraffetIO {
     public List<String> nodes() {
         return nodes;
     }
+
 }
