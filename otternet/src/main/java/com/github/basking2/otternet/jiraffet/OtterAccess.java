@@ -22,7 +22,7 @@ public class OtterAccess extends JiraffetAccess{
         super(jiraffet, io, log, scheduledExecutorService);
     }
 
-    public Future<ClientResponse> clientRequestJoin(final String id) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientRequestJoin(final String id) throws JiraffetIOException {
         byte[] idBytes = id.getBytes();
         byte[] joinRequest = new byte[1 + idBytes.length];
 
@@ -34,7 +34,7 @@ public class OtterAccess extends JiraffetAccess{
         return clientRequest(joinRequest);
     }
 
-    public Future<ClientResponse> clientRequestLeave(final String id) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientRequestLeave(final String id) throws JiraffetIOException {
         byte[] idBytes = id.getBytes();
         byte[] leaveRequest = new byte[1 + idBytes.length];
         leaveRequest[0] = (byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal();
@@ -47,7 +47,7 @@ public class OtterAccess extends JiraffetAccess{
         return clientRequest(leaveRequest);
     }
 
-    public Future<ClientResponse> clientAppendBlob(final String key, final String type, final byte[] data) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientAppendBlob(final String key, final String type, final byte[] data) throws JiraffetIOException {
 
         byte[] blobBytes = new byte[1 + 4 + key.getBytes().length + 4 + type.getBytes().length + 4 + data.length];
         ByteBuffer blobByteBuffer = ByteBuffer.wrap(blobBytes);
@@ -66,8 +66,8 @@ public class OtterAccess extends JiraffetAccess{
         return clientRequest(blobBytes);
     }
 
-    public Future<ClientResponse> clientRequest(final byte[] message) throws JiraffetIOException {
-        final CompletableFuture<ClientResponse> future = new CompletableFuture<>();
+    public Future<OtterAccessClientResponse> clientRequest(final byte[] message) throws JiraffetIOException {
+        final CompletableFuture<OtterAccessClientResponse> future = new CompletableFuture<>();
 
         append(asList(new ClientRequest() {
             @Override
@@ -77,7 +77,7 @@ public class OtterAccess extends JiraffetAccess{
 
             @Override
             public void complete(boolean success, String leader, String msg) {
-                future.complete(new ClientResponse(success, leader, msg));
+                future.complete(new OtterAccessClientResponse(success, leader, msg));
             }
         }));
 

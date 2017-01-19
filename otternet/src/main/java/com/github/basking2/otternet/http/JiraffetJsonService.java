@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -18,10 +17,9 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import com.github.basking2.jiraffet.Jiraffet;
-import com.github.basking2.jiraffet.JiraffetAccess;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
-import com.github.basking2.otternet.jiraffet.ClientResponse;
+import com.github.basking2.otternet.jiraffet.OtterAccessClientResponse;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
@@ -87,7 +85,7 @@ public class JiraffetJsonService {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response postJoin(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
-        final Future<ClientResponse> clientResponseFuture = access.clientRequestJoin(join.getId());
+        final Future<OtterAccessClientResponse> clientResponseFuture = access.clientRequestJoin(join.getId());
 
         return postJoinResponse(clientResponseFuture);
     }
@@ -98,7 +96,7 @@ public class JiraffetJsonService {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response postLeave(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
-        final Future<ClientResponse> clientResponseFuture = access.clientRequestLeave(join.getId());
+        final Future<OtterAccessClientResponse> clientResponseFuture = access.clientRequestLeave(join.getId());
 
         return postJoinResponse(clientResponseFuture);
     }
@@ -117,7 +115,7 @@ public class JiraffetJsonService {
 
         final byte[] data = IOUtils.toByteArray(postBody);
 
-        final Future<ClientResponse> clientResponseFuture =  access.clientAppendBlob(key, type, data);
+        final Future<OtterAccessClientResponse> clientResponseFuture =  access.clientAppendBlob(key, type, data);
 
         return postBlobResponse(clientResponseFuture, key);
     }
@@ -142,10 +140,10 @@ public class JiraffetJsonService {
         return Response.ok(blobData.getData()).type(blobData.getType()).build();
     }
 
-    private Response postBlobResponse(final Future<ClientResponse> clientResponseFuture, final String key) {
+    private Response postBlobResponse(final Future<OtterAccessClientResponse> clientResponseFuture, final String key) {
         try {
 
-            final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
+            final OtterAccessClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
 
             if (clientResponse.isSuccess()) {
                 return Response.ok(new JsonResponse()).build();
@@ -183,11 +181,11 @@ public class JiraffetJsonService {
      * @throws URISyntaxException The URI syntax is not correct for the leader.
      * @throws InterruptedException The waiting thread is interrupted.
      */
-    private Response postJoinResponse(final Future<ClientResponse> clientResponseFuture) {
+    private Response postJoinResponse(final Future<OtterAccessClientResponse> clientResponseFuture) {
         try {
             final JoinResponse joinResponse = new JoinResponse();
 
-            final ClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
+            final OtterAccessClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
 
             // Tell the client who the current leader is.
             joinResponse.setLeader(jiraffet.getCurrentLeader());

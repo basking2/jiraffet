@@ -196,7 +196,7 @@ public class OtterLog implements LogDao {
                 break;
             case SNAPSHOT_ENTRY:
                 final int firstIndex = ByteBuffer.wrap(data).getInt(1);
-                purgeBefore(firstIndex);
+                deleteBefore(firstIndex);
                 break;
             default:
                 throw new IllegalStateException("Unexpected data type: " + data[0]);
@@ -212,8 +212,12 @@ public class OtterLog implements LogDao {
      * lowest and first index we have.
      * @param index
      */
-    private void purgeBefore(final int index) {
+    public void deleteBefore(final int index) {
         int offsetIndex = index - offset;
+
+        if (offsetIndex < 0) {
+            offsetIndex = 0;
+        }
 
         // Create a view into the logs.
         final List<byte[]> dataLogView = dataLog.subList(offsetIndex, dataLog.size());
@@ -310,4 +314,5 @@ public class OtterLog implements LogDao {
     public int lastApplied() {
         return lastApplied;
     }
+
 }

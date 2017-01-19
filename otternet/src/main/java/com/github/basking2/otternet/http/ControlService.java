@@ -81,6 +81,7 @@ public class ControlService {
 
             LOG.info("Got response from node {}. Setting leader {} with term {}.", node, r.getLeader(), r.getTerm());
             jiraffet.setNewLeader(r.getLeader(), r.getTerm());
+            log.deleteBefore(r.getLogCompactionIndex());
 
             return r;
         }
