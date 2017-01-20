@@ -13,15 +13,15 @@ import com.github.basking2.jiraffet.JiraffetLog;
 
 /**
  */
-public class LogDaoMyBatis implements JiraffetLog {
+public class LogMyBatis implements JiraffetLog {
     
-    private static final Logger LOG = LoggerFactory.getLogger(LogDaoMyBatis.class);
+    private static final Logger LOG = LoggerFactory.getLogger(LogMyBatis.class);
 
     private SqlSessionManager sqlSessionManager;
     
     private List<Applier> appliers;
 
-    public LogDaoMyBatis(final SqlSessionManager sqlSessionManager) {
+    public LogMyBatis(final SqlSessionManager sqlSessionManager) {
         this.sqlSessionManager = sqlSessionManager;
         this.appliers = new ArrayList<Applier>();
     }

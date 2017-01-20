@@ -7,7 +7,7 @@ public class LogDaoDbManagerTest {
     @Test
     public void testMigrate() throws Exception {
         final EphemeralDirectory dir = new EphemeralDirectory();
-        LogDaoDbManager db = new LogDaoDbManager(dir.getTemporaryDirectory().toString());
+        LogDbManager db = new LogDbManager(dir.getTemporaryDirectory().toString());
         db.close();
         dir.close();
     }

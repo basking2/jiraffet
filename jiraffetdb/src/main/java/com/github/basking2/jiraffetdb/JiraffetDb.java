@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.sql.SQLException;
 
 import com.github.basking2.jiraffet.JiraffetRaft;
+import com.github.basking2.jiraffet.db.LogDbManager;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
@@ -12,8 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import com.github.basking2.jiraffet.JiraffetTcpIO;
 import com.github.basking2.jiraffet.JiraffetTcpIOFactory;
-import com.github.basking2.jiraffet.db.LogDaoDbManager;
-import com.github.basking2.jiraffet.db.LogDaoMyBatis;
+import com.github.basking2.jiraffet.db.LogMyBatis;
 import com.github.basking2.jiraffetdb.dao.DbManager;
 import com.github.basking2.jiraffetdb.dao.KeyValueDao;
 import com.github.basking2.jiraffetdb.util.App;
@@ -26,7 +26,7 @@ public class JiraffetDb {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetDb.class);
 
     private Configuration appConfiguration;
-    private LogDaoMyBatis log;
+    private LogMyBatis log;
     private KeyValueDao kv;
     private JiraffetTcpIO io;
 
@@ -66,14 +66,14 @@ public class JiraffetDb {
 
     }
 
-    public LogDaoMyBatis buildLogDao() throws SQLException, ClassNotFoundException {
+    public LogMyBatis buildLogDao() throws SQLException, ClassNotFoundException {
         String dbHome = appConfiguration.getString("jiraffetdb.raft.db");
 
         if (dbHome == null) {
             dbHome = appConfiguration.getString("jiraffetdb.home") + "/raftdb";
         }
 
-        final LogDaoDbManager db = new LogDaoDbManager(dbHome);
+        final LogDbManager db = new LogDbManager(dbHome);
 
         return db.getLogDao();
     }
