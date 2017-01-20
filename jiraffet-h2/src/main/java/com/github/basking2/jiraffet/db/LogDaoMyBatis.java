@@ -164,9 +164,23 @@ public class LogDaoMyBatis implements JiraffetLog {
             }
         }
     }
-    
+
     @FunctionalInterface
     public interface Applier {
         void apply(int index) throws Exception;
+    }
+
+    @Override
+    public int lastApplied() {
+        try (final SqlSession session = sqlSessionManager.openSession()) {
+            final LogMapper mapper = session.getMapper(LogMapper.class);
+            final Integer i = mapper.getLastApplied();
+            if (i == null) {
+                return 0;
+            }
+            else {
+                return i;
+            }
+        }
     }
 }
