@@ -13,13 +13,13 @@ import static java.util.Arrays.asList;
 /**
  * Adds some methods to write user types.
  */
-public class OtterAccess extends JiraffetAccess{
-    public OtterAccess(Jiraffet jiraffet, JiraffetIO io, LogDao log) {
-        super(jiraffet, io, log);
+public class OtterAccess extends Jiraffet {
+    public OtterAccess(JiraffetRaft raft, JiraffetIO io, JiraffetLog log) {
+        super(raft, io, log);
     }
 
-    public OtterAccess(Jiraffet jiraffet, JiraffetIO io, LogDao log, ScheduledExecutorService scheduledExecutorService) {
-        super(jiraffet, io, log, scheduledExecutorService);
+    public OtterAccess(JiraffetRaft raft, JiraffetIO io, JiraffetLog log, ScheduledExecutorService scheduledExecutorService) {
+        super(raft, io, log, scheduledExecutorService);
     }
 
     public Future<OtterAccessClientResponse> clientRequestJoin(final String id) throws JiraffetIOException {

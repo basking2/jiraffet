@@ -1,450 +1,268 @@
 package com.github.basking2.jiraffet;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
-import com.github.basking2.jiraffet.messages.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.basking2.jiraffet.LogDao.EntryMeta;
-import com.github.basking2.jiraffet.util.Timer;
+import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
+import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
+import com.github.basking2.jiraffet.messages.ClientRequest;
+import com.github.basking2.jiraffet.messages.RequestVoteRequest;
+import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 
 /**
- * An instance of the Raft algorithm.
+ * This class ties together the logic, the storage, and the communication pieces of Jiraffet.
+ *
+ * This class is thread-safe.
  */
-public class Jiraffet
-{
-    public static final Logger LOG = LoggerFactory.getLogger(Jiraffet.class);
+public class Jiraffet {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Jiraffet.class);
+
+    private final JiraffetIO io;
+    private final JiraffetLog log;
+    private final JiraffetRaft raft;
+
+    private long leaderTimeoutMs;
+    private long followerTimeoutMs;
+    private boolean running;
+    private ScheduledExecutorService scheduledExecutorService;
 
     /**
-     * A limit on the number of log messages sent in any update.
+     * Periodically wake up and send heartbeats of things have been quiet.
      */
-    private static final int LOG_ENTRY_LIMIT = 10;
-
-    private String currentLeader;
+    private Callable<Void> leaderHeartbeats;
 
     /**
-     * The log the Raft algorithm is managing..
+     * Periodically wake up and become the leader if we haven't heared from a leader in a while.
      */
-    private LogDao log;
+    private Callable<Void> followerElections;
 
     /**
-     * Map of what we think the followers need for their next index.
+     * The epoch ({@link System#currentTimeMillis()}) since something last happened that would reset a timer.
      */
-    private Map<String, Integer> nextIndex;
+    private volatile long lastActivity;
 
-    /**
-     * Are we a leader, follower, or candidate.
-     */
-    private State mode;
+    public Jiraffet(
+            final JiraffetRaft raft,
+            final JiraffetIO io,
+            final JiraffetLog log
+    ) {
+        this(raft, io, log, Executors.newSingleThreadScheduledExecutor());
+    }
 
-    /**
-     * Number of votes we have.
-     */
-    private int votes;
-
-    /**
-     * How we talk to others.
-     */
-    private JiraffetIO io;
-
-    enum State {
-        CANDIDATE,
-        FOLLOWER,
-        LEADER
-    };
-
-    /**
-     * @param log Where entries are committed and applied. Also it holds some persistent state such
-     *            as the current term and whom we last voted for.
-     * @param io How messages are sent to other nodes.
-     */
-    public Jiraffet(final LogDao log, final JiraffetIO io) {
+    public Jiraffet(
+            final JiraffetRaft raft,
+            final JiraffetIO io,
+            final JiraffetLog log,
+            final ScheduledExecutorService scheduledExecutorService
+    ) {
+        this.scheduledExecutorService = scheduledExecutorService;
+        this.raft = raft;
         this.io = io;
         this.log = log;
-        this.mode = State.FOLLOWER;
-        this.nextIndex = new HashMap<>();
-        this.currentLeader = "";
+        this.leaderTimeoutMs = 5000L;
+        this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
+        this.leaderHeartbeats = buildLeaderHeartbeats();
+        this.followerElections = buildFollowerElections();
     }
 
-    /**
-     * Invoked by leader to replicate log entries; also used as heartbeat.
-     *
-     * This creates a request that should be sent to followers.
-     *
-     * @param id The ID of the node to send messages to.
-     * @return Request to send to followers.
-     * @throws JiraffetIOException Any IO error.
-     */
-    public AppendEntriesRequest appendEntries(final String id) throws JiraffetIOException {
-
-        // A node has not told the leader which index they want next.
-        // Assume they would like the very next index (they are totally up-to-date).
-        // If they are not, they can correct us.
-        if (!nextIndex.containsKey(id)) {
-            nextIndex.put(id, log.last().getIndex()+1);
-        }
-
-        // Get the most data we have and will try to commit.
-        final int largestIndex = log.last().getIndex();
-
-        // Get the commit log index we would like to send to the node.
-        final int nextExpectedIndex = nextIndex.get(id);
-
-        final List<LogEntry> entries;
-
-        // If we have fewer entries than another node then the node is up-to-date.
-        // That is, it is expecting a log yet to be created or it has un-applied entries we will replace.
-        if (largestIndex < nextExpectedIndex) {
-            entries = new ArrayList<>();
-        }
-
-        // Otherwise, the node needs some records.
-        else {
-
-            final int entriesToSend = Math.min(LOG_ENTRY_LIMIT, largestIndex - nextExpectedIndex + 1);
-
-            entries = new ArrayList<>(entriesToSend);
-
-            for (int i = 0; i < entriesToSend; ++i) {
-                entries.add(log.getLogEntry(nextExpectedIndex+i));
-            }
-        }
-
-        return new AppendEntriesRequest(
-                log.getCurrentTerm(),
-                currentLeader,
-                log.getMeta(nextExpectedIndex-1),
-                entries,
-                log.last().getIndex());
-    }
-
-    /**
-     * Set a new node as a leader.
-     *
-     * This is very useful when programatically changing cluster membership.
-     *
-     * @param leaderId The new leader's ID.
-     * @param term The term this leader is presiding over.
-     * @throws JiraffetIOException Any error.
-     */
-    public void setNewLeader(final String leaderId, int term) throws JiraffetIOException {
-        LOG.info("New leader {}.", leaderId);
-        log.setVotedFor(null);
-        log.setCurrentTerm(term);
-        mode = State.FOLLOWER;
-        currentLeader = leaderId;
-    }
-
-    /**
-     * Invoked by leader to replicate log entries; also used as heartbeat.
-     *
-     * This is executed on the follower when an AppendEntriesRequest is received.
-     *
-     * @param req The request.
-     * @return The response.
-     * @throws JiraffetIOException Any IO error.
-     */
-    public AppendEntriesResponse appendEntries(final AppendEntriesRequest req) throws JiraffetIOException {
-
-        final AppendEntriesResponse resp;
-
-        // If the leader and term match, try to do this.
-        if (req.getTerm() < log.getCurrentTerm()) {
-            LOG.info("Rejecting log from {}. Previous term {}.", req.getLeaderId(), req.getPrevLogTerm());
-            // Ignore invalid request.
-            resp = req.reject(io.getNodeId(), log.last().getIndex()+1);
-        }
-
-        // If the leader knows the previous log state, we can apply this.
-        else if (log.hasEntry(req.getPrevLogIndex(), req.getPrevLogTerm())) {
-
-            // If the term is greater, we have a new leader. Adjust things.
-            if (req.getTerm() > log.getCurrentTerm()) {
-                setNewLeader(req.getLeaderId(), req.getTerm());
-            }
-
-            for (LogEntry entry : req.getEntries()) {
-                log.write(entry.getTerm(), entry.getIndex(), entry.getData());
-            }
-
-            // Pick the leader's commit index or the last entry in our log, which ever is smaller.
-            final int commitLimit = Math.min(req.getLeaderCommit(), log.last().getIndex());
-
-            // Apply all up to what the leader has committed up to the maximum we have in our log.
-            for (int commitIndex = log.lastApplied()+1; commitIndex <= commitLimit; ++commitIndex) {
-                log.apply(commitIndex);
-            }
-
-            // Always fetch this from the log to ensure the leader didn't send us optimistic (but wrong) values.
-            final int nextCommitIndex = log.last().getIndex() + 1;
-
-            LOG.info("Accepted log update from {}.", req.getLeaderId());
-            resp = req.accept(io.getNodeId(), nextCommitIndex);
-        }
-        else {
-            LOG.info("Rejecting from {}. We don't have entry term/index {}/{}.", req.getLeaderId(), req.getPrevLogTerm(), req.getPrevLogIndex());
-            resp = req.reject(io.getNodeId(), log.last().getIndex()+1);
-        }
-
-        // Send response back to leader.
-        return resp;
-    }
-
-    /**
-     * Initialization to be done upon becoming a leader.
-     *
-     * @throws JiraffetIOException On any error.
-     */
-    public void leaderInit() throws JiraffetIOException {
-        // A new leader first initializes stuff.
-        for (final String key : io.nodes()) {
-            nextIndex.put(key, log.last().getIndex()+1);
-        }
-    }
-
-    /**
-     * Run the event loop.
-     *
-     * @throws JiraffetIOException on any IO error.
-     */
-    public void start() throws JiraffetIOException
-    {
-        mode = State.FOLLOWER;
-        currentLeader = log.getVotedFor();
-    }
-
-    /**
-     * Just send a heartbeat.
-     * @throws JiraffetIOException on errors.
-     */
-    public void heartBeat() throws JiraffetIOException {
-        handleClientRequests(new ArrayList<>(0));
-    }
-
-     public void handleClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
-        switch (mode){
-        case LEADER:
-            appendClientRequests(clientRequests);
-            break;
-        case FOLLOWER:
-        case CANDIDATE:
-            for (final ClientRequest req : clientRequests) {
-                req.complete(false, currentLeader, "Not leader.");
-            }
-            break;
-        }
-
-    }
-
-    /**
-     * If we are a leader, commit these logs to other nodes and then commit them locally and apply them.
-     *
-     * @param clientRequests Requests from the client on this machine.
-     * @throws JiraffetIOException On any error.
-     */
-    private void appendClientRequests(final List<ClientRequest> clientRequests) throws JiraffetIOException {
-
-        // For every node we know about, build a request list.
-        final List<String> nodes = io.nodes();
-        final List<AppendEntriesRequest> requests = new ArrayList<>(nodes.size());
-
-        final int lastIndex = log.last().getIndex();
-
-        for (final String node : nodes) {
-
-            if (!nextIndex.containsKey(node)) {
-                nextIndex.put(node, log.last().getIndex() + 1);
-            }
-
-            final int nextExpectedIndex = nextIndex.get(node);
-
-            final EntryMeta previousMeta = log.getMeta(nextExpectedIndex-1);
-            final List<LogEntry> entries = new ArrayList<>();
-
-            // If we don't think the follower is caught up.
-            if (nextExpectedIndex <= lastIndex) {
-                // If the follower is not caught up, attempt to catch them up with this message.
-                for (int i = nextExpectedIndex; i <= lastIndex && entries.size() < LOG_ENTRY_LIMIT; ++i) {
-                    entries.add(log.getLogEntry(i));
+    private Callable<Void> buildLeaderHeartbeats() {
+        return new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                LOG.info("Leader heartbeat.");
+                if (!running) {
+                    throw new Exception("Not running!");
                 }
-            }
 
-            // If the client can be caught up with the current list of entries, include the client requests.
-            if (previousMeta.getIndex() + entries.size() == lastIndex) {
-                int index = log.last().getIndex();
-                for (final ClientRequest cr : clientRequests) {
-                    final LogEntry logEntry = new LogEntry(++index, log.getCurrentTerm(), cr.getData());
-                    entries.add(logEntry);
-                }
-            }
+                try {
+                    synchronized (raft) {
 
-            // Add the final request to our list of messages to send.
-            requests.add(
-                new AppendEntriesRequest(
-                    log.getCurrentTerm(),
-                    currentLeader,
-                    previousMeta.getIndex(),
-                    previousMeta.getTerm(),
-                    entries,
-                    lastIndex
-                )
-            );
-        }
+                        if (!raft.isLeader()) {
+                            scheduleAsFollower();
+                            throw new Exception("We are not the leader!");
+                        }
 
-        // Do the IO.
-        final List<AppendEntriesResponse> responses = io.appendEntries(nodes, requests);
+                        LOG.info("No activity for {} ms.", System.currentTimeMillis() - lastActivity);
 
-        // Collect all the known next indexes and votes.
-        int votes = 0;
-        for (final AppendEntriesResponse response: responses) {
-            nextIndex.put(response.getFrom(), response.getNextCommitIndex());
+                        // If the leader timeout has expired, send heartbeats.
+                        if (System.currentTimeMillis() - lastActivity >= leaderTimeoutMs) {
+                            heartbeats();
+                        }
 
-            // If the request is a success and then follower expects data more than our log will eventually hold, vote!
-            if (response.isSuccess() && lastIndex + clientRequests.size() < response.getNextCommitIndex()) {
-                votes++;
-            }
-        }
-
-        // If enough clients replicated the log, we will write it, apply it, and
-        // on the next follower communication, notify them to apply the log.
-        if (votes + 1 > (io.nodeCount()+1)/2) {
-            int index = lastIndex;
-            final int currentTerm = log.getCurrentTerm();
-
-            // The followers all have a copy. Lets persist what we have and tell the user.
-            for (final ClientRequest cr: clientRequests) {
-                index++;
-                log.write(currentTerm, index, cr.getData());
-            }
-
-            // Apply everything we replicated.
-            for (int i = log.lastApplied()+1; i <= index; ++i) {
-                log.apply(i);
-            }
-
-            // Tell the user the good news.
-            for (ClientRequest cr: clientRequests) {
-                cr.complete(true, currentLeader, "");
-            }
-        }
-        else {
-            for (ClientRequest cr: clientRequests) {
-                cr.complete(false, currentLeader, "replication");
-            }
-        }
-    }
-
-    /**
-     * Send a {@link RequestVoteRequest} to all. We have not heard anything from a leader in some timeout.
-     */
-    public void startElection() {
-        try {
-            if (mode != State.CANDIDATE) {
-                mode = State.CANDIDATE;
-            }
-            
-            // Always increment the current term.
-            log.setCurrentTerm(log.getCurrentTerm() + 1);
-
-            // votes = 1, we vote for ourselves.
-            votes = 1;
-            log.setVotedFor(io.getNodeId());
-
-            // There is no current leader.
-            currentLeader = null;
-            
-            // If we are the only node we are the leader by special base-case logic.
-            if (io.nodeCount() == 0) {
-                currentLeader = io.getNodeId();
-                mode = State.LEADER;
-                log.setVotedFor(null);
-            }
-            else {
-                final List<RequestVoteResponse> voteResps = io.requestVotes(new RequestVoteRequest(log.getCurrentTerm(), io.getNodeId(), log.last()));
-                for (final RequestVoteResponse voteResp : voteResps) {
-                    if (voteResp.isVoteGranted()) {
-                        votes++;
+                        final long sinceLastActivity = System.currentTimeMillis() - lastActivity;
+                        scheduledExecutorService.schedule(this, leaderTimeoutMs - sinceLastActivity, TimeUnit.MILLISECONDS);
                     }
                 }
-
-                if (votes > (io.nodeCount() + 1)/ 2) {
-                    LOG.info("Node {} believes itself the leader for term {}.", io.getNodeId(), log.getCurrentTerm());
-                    currentLeader = io.getNodeId();
-                    mode = State.LEADER;
-                    log.setVotedFor(null);
-
-                    // Heartbeat.
-                    appendClientRequests(new ArrayList<>(0));
-
-                    // Use the shorter leader timeout to heartbeat.
+                catch (final Throwable t) {
+                    LOG.error("Follower Election Crash.", t);
                 }
+
+                return null;
             }
-        }
-        catch (final JiraffetIOException e) {
-            LOG.error("Starting election.", e);
+        };
+    }
+
+    private Callable<Void> buildFollowerElections() {
+        return new Callable<Void>(){
+            @Override
+            public Void call() throws Exception {
+                LOG.info("Follower election check.");
+                if (!running) {
+                    LOG.info("Not running! Follower check exiting.");
+                    throw new Exception("Not running!");
+                }
+
+                try {
+                    synchronized (raft) {
+                        // If we are the leader, abort.
+                        if (raft.isLeader()) {
+                            scheduleAsLeader();
+                            throw new Exception("We are not a follower!");
+                        }
+
+                        final long sinceLastActivity = System.currentTimeMillis() - lastActivity;
+
+                        LOG.info("Last activity {} ms ago.", sinceLastActivity);
+
+                        // No leader has talked to us in quite a while. Let's try to become the leader!
+                        if (sinceLastActivity >= followerTimeoutMs) {
+                            try {
+                                raft.startElection();
+                            } catch (final Exception e) {
+                                LOG.error("Starting election.", e);
+                            }
+
+                            // If we became the leader, schedule that work!
+                            if (raft.isLeader()) {
+                                scheduleAsLeader();
+                            } else {
+                                // Retry after a random sleep.
+                                long sleep = 0;
+                                do {
+                                    sleep = (long) (Math.random() * followerTimeoutMs);
+                                } while (sleep == 0);
+
+                                scheduledExecutorService.schedule(this, sleep, TimeUnit.MILLISECONDS);
+                            }
+                        }
+                        else {
+                            scheduledExecutorService.schedule(this, followerTimeoutMs - sinceLastActivity, TimeUnit.MILLISECONDS);
+                        }
+                    }
+                }
+                catch (final Throwable t) {
+                    LOG.error("Follower Election Crash.", t);
+                }
+
+                return null;
+            }
+        };
+    }
+    
+    public void start() throws JiraffetIOException {
+        raft.start();
+        running = true;
+        lastActivity = System.currentTimeMillis();
+        scheduleAsFollower();
+    }
+
+    public void stop() {
+        running = false;
+    }
+    
+    private void scheduleAsFollower() {
+        LOG.info("Scheduing follower check in {} ms.", followerTimeoutMs);
+        scheduledExecutorService.schedule(followerElections, followerTimeoutMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void scheduleAsLeader() {
+        LOG.info("Scheduling leader heartbeats.");
+
+        heartbeats();
+
+        scheduledExecutorService.schedule(leaderHeartbeats, leaderTimeoutMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * If another node is asking for our vote.
+     *
+     * @param request The request.
+     * @return The response.
+     * @throws JiraffetIOException On errors.
+     */
+    public RequestVoteResponse requestVotes(final RequestVoteRequest request) throws JiraffetIOException {
+        synchronized (raft) {
+            final RequestVoteResponse r = raft.requestVotes(request);
+            return r;
         }
     }
 
     /**
-     * Send a {@link RequestVoteResponse} in respose to req.
+     * If another node, a leader, asks us to append entries.
+     * @param request The requested entries to add.
+     * @return The response.
+     * @throws JiraffetIOException On any errors.
+     */
+    public AppendEntriesResponse appendEntries(final AppendEntriesRequest request) throws JiraffetIOException {
+        synchronized (raft) {
+
+            final long time = System.currentTimeMillis();
+
+            final AppendEntriesResponse r = raft.appendEntries(request);
+
+            if (request.getLeaderId().equalsIgnoreCase(raft.getCurrentLeader())) {
+                lastActivity = time;
+            }
+
+            return r;
+        }
+    }
+
+    /**
+     * Submit new data.
      *
-     * @param req A request for votes received from our IO layer.
-     * @return The vote response.
+     * @param requests The client's requests.
+     *
      * @throws JiraffetIOException on errors.
      */
-    public RequestVoteResponse requestVotes(final RequestVoteRequest req) throws JiraffetIOException {
-        try {
-            final String candidateId = req.getCandidateId();
-            
-            // If it's an old term, reject.
-            if (req.getTerm() <= log.getCurrentTerm()) {
-                LOG.debug("Rejecting vote request from {} term {}.", candidateId, req.getTerm());
-                return req.reject();
-            }
-            
-            final EntryMeta lastLog = log.last();
-            
-            // If the candidate asking for our vote has logs in the future, we will vote for them.
-            if (log.getVotedFor() == null || req.getLastLogTerm() >= lastLog.getTerm() && req.getLastLogIndex() >= lastLog.getIndex()) {
-                LOG.debug("Voting for {} term {}.", candidateId, req.getTerm());
-                // If we get here, well, vote!
-                log.setVotedFor(candidateId);
+    public void append(final List<ClientRequest> requests) throws JiraffetIOException {
+        synchronized (raft) {
+            // Record when we start work.
+            final long time = System.currentTimeMillis();
 
-                return req.vote();
+            // Leader or not, let JiraffetRaft produce the response.
+            raft.handleClientRequests(requests);
+
+            // Only update the activity if we are the leader.
+            if (raft.isLeader()) {
+                lastActivity = time;
             }
-            else {
-                LOG.debug("Rejecting vote request from {} term {} log term {} log idx {}.", new Object[]{candidateId, req.getTerm(), req.getLastLogTerm(), req.getLastLogIndex()});
-                // If the potential leader does not have at LEAST our last log entry, reject.
-                return req.reject();
-            }
-        }
-        catch (final JiraffetIOException e) {
-            LOG.error("Casting vote.", e);
-            throw e;
         }
     }
 
     /**
-     * Return the nodeId of the node that we believe is the current leader.
-     *
-     * @return the nodeId of the node that we believe is the current leader.
+     * Send heartbeats. Only call if we are the leader.
      */
-    public String getCurrentLeader() {
-        return currentLeader;
-    }
+    public void heartbeats() {
+        synchronized (raft) {
+            try {
+                final long time = System.currentTimeMillis();
 
-    public boolean isLeader() {
-        final String currentLeader = getCurrentLeader();
+                raft.heartBeat();
 
-        if (currentLeader == null) {
-            return false;
+                // Only record this activity if we are the leader.
+                if (raft.isLeader()) {
+                    lastActivity = time;
+                }
+            }
+            catch (final Exception e) {
+                LOG.error("Sending heartbeats.", e);
+            }
         }
-
-        return currentLeader.equals(io.getNodeId());
     }
+
 }

@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
 
-import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetRaft;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
@@ -81,7 +81,7 @@ public class JiraffetDb {
 
     public void start() {
         try {
-            Jiraffet jiraffet = new Jiraffet(log, io);
+            JiraffetRaft jiraffet = new JiraffetRaft(log, io);
 
             jiraffet.setLeaderTimeout(2000);
             jiraffet.setFollowerTimeout(5000);
@@ -91,7 +91,7 @@ public class JiraffetDb {
             jiraffet.run();
         }
         catch (final Exception e) {
-            LOG.error("Running Jiraffet.", e);
+            LOG.error("Running JiraffetRaft.", e);
         }
     }
 }

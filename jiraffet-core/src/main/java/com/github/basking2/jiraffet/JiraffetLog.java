@@ -5,7 +5,7 @@ import com.github.basking2.jiraffet.messages.LogEntry;
 /**
  * The Raft Log entry.
  */
-public interface LogDao {
+public interface JiraffetLog {
 
     /**
      * Set the current term. This is distinct from the term of the last log entry.

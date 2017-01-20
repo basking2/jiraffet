@@ -11,7 +11,7 @@ public interface ClientRequest extends Message {
 
 
     /**
-     * Jiraffet will report back the result of the request through this interface.
+     * JiraffetRaft will report back the result of the request through this interface.
      *
      * @param success True if successful.
      * @param leader The leader ID, if known and this node is not the leader.

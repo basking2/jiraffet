@@ -19,8 +19,7 @@ import org.glassfish.jersey.server.wadl.WadlFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.basking2.jiraffet.Jiraffet;
-import com.github.basking2.jiraffet.JiraffetAccess;
+import com.github.basking2.jiraffet.JiraffetRaft;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.otternet.http.JiraffetJsonService;
 import com.github.basking2.otternet.jiraffet.OtterIO;
@@ -41,7 +40,7 @@ public class OtterNet implements AutoCloseable {
     final private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
     final private OtterIO io;
     final private OtterLog log;
-    final private Jiraffet jiraffet;
+    final private JiraffetRaft raft;
     final private OtterAccess access;
     final private Configuration config;
 
@@ -127,8 +126,8 @@ public class OtterNet implements AutoCloseable {
 
         io = new OtterIO(id, new ArrayList<>());
         log = new OtterLog(this, io);
-        jiraffet = new Jiraffet(log, io);
-        access = new OtterAccess(jiraffet, io, log);
+        raft = new JiraffetRaft(log, io);
+        access = new OtterAccess(raft, io, log);
         httpServer = new HttpServer();
 
         final NetworkListener networkListener = new NetworkListener("otter", ip, port);
@@ -176,8 +175,8 @@ public class OtterNet implements AutoCloseable {
 
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
-        rc.register(new JiraffetJsonService(access, jiraffet, io, log));
-        rc.register(new ControlService(jiraffet, io, log));
+        rc.register(new JiraffetJsonService(access, raft, io, log));
+        rc.register(new ControlService(raft, io, log));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);
         rc.packages("com.github.basking2.otternet.http.scanned");

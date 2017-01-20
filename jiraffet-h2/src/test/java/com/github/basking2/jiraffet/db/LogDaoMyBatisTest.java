@@ -18,7 +18,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 
 public class LogDaoMyBatisTest {
     static EphemeralDirectory dir;
@@ -55,7 +55,7 @@ public class LogDaoMyBatisTest {
     }
 
     @Test public void testGetMeta() throws JiraffetIOException {
-        LogDao.EntryMeta meta = new LogDao.EntryMeta(
+        JiraffetLog.EntryMeta meta = new JiraffetLog.EntryMeta(
                 (int)(Math.random() * Integer.MAX_VALUE),
                 (int)(Math.random() * Integer.MAX_VALUE));
 

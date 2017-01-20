@@ -16,7 +16,7 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetRaft;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.otternet.jiraffet.OtterAccessClientResponse;
@@ -28,9 +28,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Implementation of Raft by Jiraffet on the local node.
+ * Implementation of Raft by JiraffetRaft on the local node.
  *
- * Calls in here are going to the Jiraffet and related services running.
+ * Calls in here are going to the JiraffetRaft and related services running.
  *
  * If a remote node tries to join the cluster, it will call /jiraffet/join to do so.
  * If you want to instruct a node to join with a remote system
@@ -41,11 +41,11 @@ public class JiraffetJsonService {
 
     private OtterIO io;
     private OtterLog log;
-    private Jiraffet jiraffet;
+    private JiraffetRaft raft;
     private OtterAccess access;
 
-    public JiraffetJsonService(final OtterAccess access, final Jiraffet jiraffet, final OtterIO io, final OtterLog log) {
-        this.jiraffet = jiraffet;
+    public JiraffetJsonService(final OtterAccess access, final JiraffetRaft raft, final OtterIO io, final OtterLog log) {
+        this.raft = raft;
         this.io = io;
         this.log = log;
         this.access = access;
@@ -188,7 +188,7 @@ public class JiraffetJsonService {
             final OtterAccessClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
 
             // Tell the client who the current leader is.
-            joinResponse.setLeader(jiraffet.getCurrentLeader());
+            joinResponse.setLeader(raft.getCurrentLeader());
             joinResponse.setTerm(log.getCurrentTerm());
 
             if (clientResponse.isSuccess()) {

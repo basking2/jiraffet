@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.apache.ibatis.type.JdbcType;
 
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 
 public interface LogMapper {
 
@@ -32,7 +32,7 @@ public interface LogMapper {
             @Arg(column = "term", javaType=Integer.class),
             @Arg(column = "index", javaType=Integer.class)
     })
-    LogDao.EntryMeta getMeta(int index);
+    JiraffetLog.EntryMeta getMeta(int index);
 
     @Select("SELECT data FROM ENTRIES WHERE index = #{value} LIMIT 1")
     @Result(
@@ -63,6 +63,6 @@ public interface LogMapper {
             @Arg(column = "term", javaType=Integer.class),
             @Arg(column = "index", javaType=Integer.class)
     })
-    LogDao.EntryMeta last();
+    JiraffetLog.EntryMeta last();
 
 }

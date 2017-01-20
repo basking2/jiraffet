@@ -1,8 +1,8 @@
 package com.github.basking2.otternet.http;
 
-import com.github.basking2.jiraffet.Jiraffet;
+import com.github.basking2.jiraffet.JiraffetRaft;
 import com.github.basking2.jiraffet.JiraffetIOException;
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.glassfish.jersey.jackson.JacksonFeature;
@@ -27,10 +27,10 @@ public class ControlService {
     private static final Logger LOG = LoggerFactory.getLogger(ControlService.class);
     private OtterIO io;
     private OtterLog log;
-    private Jiraffet jiraffet;
+    private JiraffetRaft raft;
 
-    public ControlService(final Jiraffet jiraffet, final OtterIO io, final OtterLog log) {
-        this.jiraffet = jiraffet;
+    public ControlService(final JiraffetRaft raft, final OtterIO io, final OtterLog log) {
+        this.raft = raft;
         this.io = io;
         this.log = log;
     }
@@ -53,7 +53,7 @@ public class ControlService {
      * @param node The node to join to and seek to be our new leader.
      * @return The response from the target node.
      * @throws IOException On an IO exception.
-     * @throws JiraffetIOException On a Jiraffet exception.
+     * @throws JiraffetIOException On a JiraffetRaft exception.
      */
     @GET
     @Path("join/{node}")
@@ -80,7 +80,7 @@ public class ControlService {
                     invoke(JoinResponse.class);
 
             LOG.info("Got response from node {}. Setting leader {} with term {}.", node, r.getLeader(), r.getTerm());
-            jiraffet.setNewLeader(r.getLeader(), r.getTerm());
+            raft.setNewLeader(r.getLeader(), r.getTerm());
             log.deleteBefore(r.getLogCompactionIndex());
 
             return r;
@@ -95,10 +95,10 @@ public class ControlService {
     @Path("info")
     @Produces(MediaType.TEXT_PLAIN)
     public String getInfo() throws JiraffetIOException {
-        final LogDao.EntryMeta entryMeta = log.last();
+        final JiraffetLog.EntryMeta entryMeta = log.last();
         final StringBuilder sb = new StringBuilder()
                 .append("ID: ").append(io.getNodeId())
-                .append("\nLeader: ").append(jiraffet.getCurrentLeader())
+                .append("\nLeader: ").append(raft.getCurrentLeader())
                 .append("\nTerm: ").append(log.getCurrentTerm())
                 .append("\nVoted For: ").append(log.getVotedFor())
                 .append("\nLast Entry term/index: ").append(entryMeta.getTerm()).append("/").append(entryMeta.getIndex())

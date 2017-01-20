@@ -1,6 +1,6 @@
 package com.github.basking2.jiraffet.messages;
 
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 
 /**
  * Created by sskinger on 10/10/16.
@@ -15,7 +15,7 @@ public class RequestVoteRequest implements Message {
         this(0, "", 0, 0);
     }
 
-    public RequestVoteRequest(int term, String candidateId, LogDao.EntryMeta meta) {
+    public RequestVoteRequest(int term, String candidateId, JiraffetLog.EntryMeta meta) {
         this(term, candidateId, meta.getIndex(), meta.getTerm());
     }
 

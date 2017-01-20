@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * How Jiraffet messages are encoded and decoded.
+ * How JiraffetRaft messages are encoded and decoded.
  *
  * Implementors are encouraged to wrap this class in their own implementation to add features like
  * message encryption and authentication.

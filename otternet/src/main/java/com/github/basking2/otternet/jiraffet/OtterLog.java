@@ -1,13 +1,12 @@
 package com.github.basking2.otternet.jiraffet;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 import com.github.basking2.otternet.OtterNet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,7 +16,7 @@ import java.util.Map;
 /**
  * A simplistic implementation.
  */
-public class OtterLog implements LogDao {
+public class OtterLog implements JiraffetLog {
     private static final Logger LOG = LoggerFactory.getLogger(OtterLog.class);
     private int currentTerm;
     private int lastApplied;
@@ -210,7 +209,8 @@ public class OtterLog implements LogDao {
      *
      * The {@link #offset} field is set to the value of index as the first element in the new arrays is the
      * lowest and first index we have.
-     * @param index
+     *
+     * @param index The index to delete before.
      */
     public void deleteBefore(final int index) {
         int offsetIndex = index - offset;

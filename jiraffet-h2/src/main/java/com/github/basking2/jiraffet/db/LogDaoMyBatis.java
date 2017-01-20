@@ -9,11 +9,11 @@ import org.apache.ibatis.session.SqlSessionManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 
 /**
  */
-public class LogDaoMyBatis implements LogDao {
+public class LogDaoMyBatis implements JiraffetLog {
     
     private static final Logger LOG = LoggerFactory.getLogger(LogDaoMyBatis.class);
 

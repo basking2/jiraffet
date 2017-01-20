@@ -8,7 +8,7 @@ import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.jiraffet.util.VersionVoter;
 
 /**
- * Define how Jiraffet communicates with the outside world.
+ * Define how JiraffetRaft communicates with the outside world.
  *
  * This api is intended to function in a single threaded application, but may do it's work concurrently.
  */
@@ -17,7 +17,7 @@ public interface JiraffetIO extends VersionVoter.NodeCounter
     /**
      * Send the given vote request to all nodes and collect the responses.
      *
-     * @param req The Jiraffet vote request.
+     * @param req The JiraffetRaft vote request.
      * @return The responses.
      * @throws JiraffetIOException On any error.
      */

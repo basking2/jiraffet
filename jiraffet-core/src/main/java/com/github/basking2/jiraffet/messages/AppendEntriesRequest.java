@@ -3,7 +3,7 @@ package com.github.basking2.jiraffet.messages;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.github.basking2.jiraffet.LogDao;
+import com.github.basking2.jiraffet.JiraffetLog;
 
 public class AppendEntriesRequest implements Message {
     private int term;
@@ -20,7 +20,7 @@ public class AppendEntriesRequest implements Message {
     public AppendEntriesRequest(
             int term,
             String leaderId,
-            LogDao.EntryMeta prevLogTerm,
+            JiraffetLog.EntryMeta prevLogTerm,
             List<LogEntry> entries,
             int leaderCommit
     ) {
