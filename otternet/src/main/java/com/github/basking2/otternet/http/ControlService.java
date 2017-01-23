@@ -81,7 +81,15 @@ public class ControlService {
 
             LOG.info("Got response from node {}. Setting leader {} with term {}.", node, r.getLeader(), r.getTerm());
             raft.setNewLeader(r.getLeader(), r.getTerm());
-            log.deleteBefore(r.getLogCompactionIndex());
+
+            if (log.getLogId().equals(r.getLogId())) {
+                log.deleteBefore(r.getLogCompactionIndex());
+            }
+            else {
+                log.clear();
+                log.setLogId(r.getLogId());
+                log.setLastApplied(r.getLogCompactionIndex()-1);
+            }
 
             return r;
         }

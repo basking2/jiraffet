@@ -190,6 +190,8 @@ public class JiraffetJsonService {
             // Tell the client who the current leader is.
             joinResponse.setLeader(raft.getCurrentLeader());
             joinResponse.setTerm(log.getCurrentTerm());
+            joinResponse.setLogId(log.getLogId());
+            joinResponse.setLogCompactionIndex(log.first().getIndex());
 
             if (clientResponse.isSuccess()) {
                 joinResponse.setStatus(JsonResponse.OK);

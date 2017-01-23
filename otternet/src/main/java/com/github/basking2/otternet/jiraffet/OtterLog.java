@@ -8,10 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * A simplistic implementation.
@@ -23,13 +20,21 @@ public class OtterLog implements JiraffetLog {
     private String votedFor;
 
     /**
+     * Uniquely identify this log.
+     *
+     * This is used to tell a node joining a cluster that its current log is completely different
+     * from the log of the cluster it has joined and should be discarded.
+     */
+    private String logId;
+
+    /**
      * Offset of the database. This supports log compaction.
      *
-     * The offset starts at 1 because there is an implicity entry 0 that signifies an empty log.
+     * The offset starts at 1 because there is an implicit entry 0 that signifies an empty log.
      */
-    private int offset = 1;
-    private List<byte[]> dataLog = new ArrayList<>();
-    private List<EntryMeta> metaLog = new ArrayList<>();
+    private int offset;
+    private List<byte[]> dataLog;
+    private List<EntryMeta> metaLog;
 
     /**
      * When blobs are applied, they are linked here for fast access.
@@ -43,8 +48,24 @@ public class OtterLog implements JiraffetLog {
         this.otterNet = otterNet;
         this.io = io;
         this.lastApplied = 0;
-        this.blobStorage = new HashMap<>();
         this.votedFor = "";
+        this.logId = UUID.randomUUID().toString();
+        this.dataLog = new ArrayList<>();
+        this.metaLog = new ArrayList<>();
+        this.offset = 1;
+        this.blobStorage = new HashMap<>();
+    }
+
+    /**
+     * Empty this log, retaining its ID and collaborator objects.
+     */
+    public void clear() {
+        dataLog.clear();
+        metaLog.clear();
+        blobStorage.clear();
+        votedFor = "";
+        offset = 1;
+        lastApplied = 0;
     }
 
     @Override
@@ -239,6 +260,22 @@ public class OtterLog implements JiraffetLog {
         return metaLog.get(metaLog.size()-1);
     }
 
+    public EntryMeta first() throws JiraffetIOException {
+        if (metaLog.isEmpty()) {
+            return new EntryMeta(0, 0);
+        }
+
+        return metaLog.get(0);
+    }
+
+    public String getLogId() {
+        return logId;
+    }
+
+    public void setLogId(final String logId) {
+        this.logId = logId;
+    }
+
     /**
      * The type of log entry stored. This determines how the log is applied.
      */
@@ -313,6 +350,10 @@ public class OtterLog implements JiraffetLog {
     @Override
     public int lastApplied() {
         return lastApplied;
+    }
+
+    public void setLastApplied(final int lastApplied) {
+        this.lastApplied = lastApplied;
     }
 
 }

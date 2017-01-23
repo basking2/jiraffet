@@ -15,6 +15,8 @@ public class JoinResponse extends JsonResponse {
 
     private int term;
 
+    private String logId;
+
     public int getLogCompactionIndex() {
         return logCompactionIndex;
     }
@@ -37,5 +39,13 @@ public class JoinResponse extends JsonResponse {
 
     public void setTerm(int term) {
         this.term = term;
+    }
+
+    public String getLogId() {
+        return logId;
+    }
+
+    public void setLogId(String logId) {
+        this.logId = logId;
     }
 }
