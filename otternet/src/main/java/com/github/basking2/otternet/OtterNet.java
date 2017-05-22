@@ -127,7 +127,7 @@ public class OtterNet implements AutoCloseable {
         io = new OtterIO(id, new ArrayList<>());
         log = new OtterLog(this, io);
         raft = new JiraffetRaft(log, io);
-        access = new OtterAccess(raft, io, log);
+        access = new OtterAccess(raft, io, log, executorService);
         httpServer = new HttpServer();
 
         final NetworkListener networkListener = new NetworkListener("otter", ip, port);
