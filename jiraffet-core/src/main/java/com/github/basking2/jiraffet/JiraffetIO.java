@@ -12,7 +12,7 @@ import com.github.basking2.jiraffet.util.VersionVoter;
  *
  * This api is intended to function in a single threaded application, but may do it's work concurrently.
  */
-public interface JiraffetIO extends VersionVoter.NodeCounter
+public interface JiraffetIO
 {
     /**
      * Send the given vote request to all nodes and collect the responses.
@@ -44,4 +44,6 @@ public interface JiraffetIO extends VersionVoter.NodeCounter
      * @return the list of nodes this IO layer knows about. This makes up the cluster.
      */
     List<String> nodes();
+
+    int nodeCount();
 }

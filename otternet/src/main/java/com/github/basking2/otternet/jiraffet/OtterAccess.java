@@ -14,12 +14,12 @@ import static java.util.Arrays.asList;
  * Adds some methods to write user types.
  */
 public class OtterAccess extends Jiraffet {
-    public OtterAccess(JiraffetRaft raft, JiraffetIO io, JiraffetLog log) {
-        super(raft, io, log);
+    public OtterAccess(JiraffetRaft raft) {
+        super(raft);
     }
 
-    public OtterAccess(JiraffetRaft raft, JiraffetIO io, JiraffetLog log, ScheduledExecutorService scheduledExecutorService) {
-        super(raft, io, log, scheduledExecutorService);
+    public OtterAccess(JiraffetRaft raft, ScheduledExecutorService scheduledExecutorService) {
+        super(raft, scheduledExecutorService);
     }
 
     public Future<OtterAccessClientResponse> clientRequestJoin(final String id) throws JiraffetIOException {

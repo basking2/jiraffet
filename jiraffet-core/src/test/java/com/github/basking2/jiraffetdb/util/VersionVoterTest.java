@@ -65,14 +65,14 @@ public class VersionVoterTest {
 
     }
 
-    private static class Voters implements VersionVoter.NodeCounter {
+    private static class Voters implements VersionVoter.VoterCounter {
         private int voters;
         public Voters(final int voters) {
             this.voters = voters;
         }
 
         @Override
-        public int nodeCount() {
+        public int voterCount() {
             return voters;
         }
     }

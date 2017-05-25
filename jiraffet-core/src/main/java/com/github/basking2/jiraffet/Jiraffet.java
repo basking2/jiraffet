@@ -13,16 +13,15 @@ import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 
 /**
- * This class ties together the logic, the storage, and the communication pieces of Jiraffet.
+ * This class runs Jiraffet. It uses a {@link ScheduledExecutorService} to time heartbeats and elections.
  *
- * This class is thread-safe.
+ * This class will synchronized on the instance of {@link JiraffetRaft} passed to it.
+ * As such, this class is thread-safe.
  */
 public class Jiraffet {
 
     private static final Logger LOG = LoggerFactory.getLogger(Jiraffet.class);
 
-    private final JiraffetIO io;
-    private final JiraffetLog log;
     private final JiraffetRaft raft;
 
     private long leaderTimeoutMs;
@@ -45,24 +44,30 @@ public class Jiraffet {
      */
     private volatile long lastActivity;
 
+    /**
+     * A construtor that uses {@link Executors#newSingleThreadScheduledExecutor()}.
+     *
+     * @param raft The logic to handle raft messages.
+     * @see #Jiraffet(JiraffetRaft, ScheduledExecutorService)
+     */
     public Jiraffet(
-            final JiraffetRaft raft,
-            final JiraffetIO io,
-            final JiraffetLog log
+            final JiraffetRaft raft
     ) {
-        this(raft, io, log, Executors.newSingleThreadScheduledExecutor());
+        this(raft, Executors.newSingleThreadScheduledExecutor());
     }
 
+    /**
+     * Constructor.
+     *
+     * @param raft The logic to handle raft messages.
+     * @param scheduledExecutorService Handle timers for elections and heartbeats.
+     */
     public Jiraffet(
             final JiraffetRaft raft,
-            final JiraffetIO io,
-            final JiraffetLog log,
             final ScheduledExecutorService scheduledExecutorService
     ) {
         this.scheduledExecutorService = scheduledExecutorService;
         this.raft = raft;
-        this.io = io;
-        this.log = log;
         this.leaderTimeoutMs = 5000L;
         this.followerTimeoutMs = 4 * this.leaderTimeoutMs;
         this.leaderHeartbeats = buildLeaderHeartbeats();
@@ -179,7 +184,9 @@ public class Jiraffet {
         scheduledExecutorService.schedule(followerElections, followerTimeoutMs, TimeUnit.MILLISECONDS);
     }
 
-    private void scheduleAsLeader() {
+    private void scheduleAsLeader() throws JiraffetIOException {
+        raft.leaderInit();
+
         LOG.info("Scheduling leader heartbeats.");
 
         heartbeats();

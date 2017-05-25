@@ -16,7 +16,6 @@ import com.github.basking2.jiraffet.JiraffetIO;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.AppendEntriesRequest;
 import com.github.basking2.jiraffet.messages.AppendEntriesResponse;
-import com.github.basking2.jiraffet.messages.Message;
 import com.github.basking2.jiraffet.messages.RequestVoteRequest;
 import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 

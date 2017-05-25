@@ -115,6 +115,22 @@ public interface JiraffetLog {
         public void setIndex(int index) {
             this.index = index;
         }
+
+        @Override
+        public boolean equals(final Object o)
+        {
+            if (o == null) {
+                return false;
+            }
+
+            if (!(o instanceof EntryMeta)) {
+                return false;
+            }
+
+            final EntryMeta em = (EntryMeta)o;
+
+            return em.term == term && em.index == index;
+        }
     }
 
 }

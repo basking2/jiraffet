@@ -9,4 +9,8 @@ public class JiraffetIOException extends Exception {
     public JiraffetIOException(final IOException e) {
         super(e.getMessage(), e);
     }
+
+    public JiraffetIOException(final String msg, final IOException e) {
+        super(msg, e);
+    }
 }

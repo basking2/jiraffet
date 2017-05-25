@@ -1,13 +1,11 @@
 package com.github.basking2.jiraffet.util;
 
-import com.github.basking2.jiraffet.JiraffetIO;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Utility that tracks the highest version something, as voted by a majority.
+ * Utility that tracks the highest version of something, as voted by a majority.
  */
 public class VersionVoter {
 
@@ -34,9 +32,9 @@ public class VersionVoter {
     /**
      * How many voters are in this election.
      */
-    private NodeCounter voters;
+    private VoterCounter voters;
 
-    public VersionVoter(final NodeCounter voters) {
+    public VersionVoter(final VoterCounter voters) {
         this.votes = new HashMap<>();
         this.listeners = new HashMap<>();
         this.rejections = new HashMap<>();
@@ -51,7 +49,7 @@ public class VersionVoter {
         rejections.put(version, rejectTotal);
 
         // If a version is utterly rejected, tell the client.
-        if (rejectTotal > voters.nodeCount() / 2) {
+        if (rejectTotal > voters.voterCount() / 2) {
             notifyOfNewVersion(version, false);
         }
     }
@@ -70,7 +68,7 @@ public class VersionVoter {
         votes.put(version, voteTotal);
 
         // If we have a new highest vote total, adjust our stored voters to save space.
-        if (voteTotal > voters.nodeCount() / 2 && version > currentVersion) {
+        if (voteTotal > voters.voterCount() / 2 && version > currentVersion) {
             newVersion(version);
         }
         else {
@@ -113,7 +111,7 @@ public class VersionVoter {
                 votes.put(k, v);
 
                 // If that vote makes the lower key a winning key, note as much.
-                if (v > voters.nodeCount() / 2 && v > highestWinner) {
+                if (v > voters.voterCount() / 2 && v > highestWinner) {
                     highestWinner = v;
                 }
             }
@@ -175,7 +173,11 @@ public class VersionVoter {
         void success(int version, boolean success);
     }
 
-    public interface NodeCounter {
-        int nodeCount();
+    /**
+     * How this object determines the number of voters.
+     */
+    @FunctionalInterface
+    public interface VoterCounter {
+        int voterCount();
     }
 }
