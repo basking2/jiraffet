@@ -24,7 +24,13 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 
 public class OtterIO implements JiraffetIO {
-    
+
+    public static final String DEFAULT_INSTANCE_NAME = "jiraffet";
+
+    /**
+     * The name of the raft instance to be communicated with.
+     */
+    private final String instanceName;
     private final List<String> nodes;
     private final String nodeId;
     private static final Logger LOG = LoggerFactory.getLogger(OtterIO.class);
@@ -48,31 +54,36 @@ public class OtterIO implements JiraffetIO {
      *
      * The executor is created by {@link Executors#newCachedThreadPool()}.
      *
+     * @param instanceName The name of the raft instance to communicate with.
      * @param nodeId This node's network ID. Typically {@code http://myhost:myport}.
      * @param nodes A list of node IDs we can connect too.
      *
-     * @see #OtterIO(String, List, ExecutorService)
+     * @see #OtterIO(String, String, List, ExecutorService)
      */
     public OtterIO(
+            final String instanceName,
             final String nodeId,
             final List<String> nodes
     )
     {
-        this(nodeId, nodes, Executors.newCachedThreadPool());
+        this(instanceName, nodeId, nodes, Executors.newCachedThreadPool());
     }
 
     /**
      * Constructor that provides the user access to defining the {@link ExecutorService}.
      *
+     * @param instanceName The name of the raft instance to communicate with.
      * @param nodeId This node's network ID. Typically {@code http://myhost:myport}.
      * @param nodes A list of node IDs we can connect too.
      * @param executorService The executor service that will be used for IO operation.
      */
     public OtterIO(
+            final String instanceName,
             final String nodeId,
             final List<String> nodes,
             final ExecutorService executorService
     ) {
+        this.instanceName = instanceName;
         this.nodeId = nodeId;
         this.nodes = nodes;
         this.executorService = executorService;
@@ -110,7 +121,7 @@ public class OtterIO implements JiraffetIO {
             public RequestVoteResponse call() throws Exception {
                 return ClientBuilder.newClient(clientBuilderConfiguration).
                         target(node).
-                        path("/jiraffet/vote/request").
+                        path("/"+instanceName+"/vote/request").
                         request(MediaType.APPLICATION_JSON).
                         buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).
                         invoke(RequestVoteResponse.class);
@@ -145,7 +156,7 @@ public class OtterIO implements JiraffetIO {
             public AppendEntriesResponse call() throws Exception {
                 return ClientBuilder.newClient(clientBuilderConfiguration).
                         target(node).
-                        path("/jiraffet/append/request").
+                        path("/"+instanceName+"/append/request").
                         request(MediaType.APPLICATION_JSON).
                         buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).
                         invoke(AppendEntriesResponse.class);

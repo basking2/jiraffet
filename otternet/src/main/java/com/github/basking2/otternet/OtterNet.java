@@ -124,8 +124,8 @@ public class OtterNet implements AutoCloseable {
 
         LOG.info("Starting OtterNet bound to {}:{} with id {}.", ip, port, id);
 
-        io = new OtterIO(id, new ArrayList<>());
-        log = new OtterLog(this, io);
+        io = new OtterIO(OtterIO.DEFAULT_INSTANCE_NAME, id, new ArrayList<>());
+        log = new OtterLog(io);
         raft = new JiraffetRaft(log, io);
         access = new OtterAccess(raft, executorService);
         httpServer = new HttpServer();

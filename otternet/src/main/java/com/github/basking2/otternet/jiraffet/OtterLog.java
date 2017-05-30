@@ -2,7 +2,6 @@ package com.github.basking2.otternet.jiraffet;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.JiraffetLog;
-import com.github.basking2.otternet.OtterNet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,11 +40,9 @@ public class OtterLog implements JiraffetLog {
      */
     private Map<String, Blob> blobStorage;
 
-    private final OtterNet otterNet;
     private final OtterIO io;
 
-    public OtterLog(final OtterNet otterNet, final OtterIO io) {
-        this.otterNet = otterNet;
+    public OtterLog(final OtterIO io) {
         this.io = io;
         this.lastApplied = 0;
         this.votedFor = "";
