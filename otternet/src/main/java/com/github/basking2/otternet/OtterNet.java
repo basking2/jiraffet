@@ -19,8 +19,6 @@ import org.glassfish.jersey.server.wadl.WadlFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.github.basking2.jiraffet.JiraffetRaft;
-import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.otternet.http.JiraffetJsonService;
 import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
@@ -124,22 +122,21 @@ public class OtterNet implements AutoCloseable {
 
         LOG.info("Starting OtterNet bound to {}:{} with id {}.", ip, port, id);
 
-        final OtterAccess.JiraffetRaftFactory raftFactory = new OtterAccess.JiraffetRaftFactory() {
-
+        final OtterAccess.JiraffetIoFactory ioFactory = new OtterAccess.JiraffetIoFactory() {
             @Override
-            public JiraffetRaft getInstance(String instanceName) {
-                // How do we communicate?
-                final OtterIO io = new OtterIO(instanceName, id, new ArrayList<>(), executorService);
-
-                // Where is the wrote-once log?
-                final OtterLog log = new OtterLog(instanceName, io);
-
-                // Link them together with some run-time data.
-                return new JiraffetRaft(log, io);
+            public OtterIO getInstance(String instanceName) {
+                return new OtterIO(instanceName, id, new ArrayList<>(), executorService);
             }
         };
 
-        access = new OtterAccess(raftFactory, executorService);
+        final OtterAccess.JiraffetLogFactory logFactory = new OtterAccess.JiraffetLogFactory() {
+            @Override
+            public OtterLog getInstance(String instanceName, OtterIO io) {
+                return new OtterLog(instanceName, io);
+            }
+        };
+
+        access = new OtterAccess(ioFactory, logFactory, executorService);
         httpServer = new HttpServer();
 
         final NetworkListener networkListener = new NetworkListener("otter", ip, port);
@@ -171,24 +168,12 @@ public class OtterNet implements AutoCloseable {
 
         httpServer.start();
 
-        final Thread jiraffetThread = new Thread(() -> {
-                try {
-                    access.start();
-                } catch (JiraffetIOException e) {
-                    LOG.error("Starting.", e);
-                }
-                return;
-            });
-
-        jiraffetThread.setDaemon(true);
-        jiraffetThread.start();
-
     }
 
     public ResourceConfig resourceConfig() {
         final ResourceConfig rc = new ResourceConfig();
-        rc.register(new JiraffetJsonService(access, raft, io, log));
-        rc.register(new ControlService(raft, io, log));
+        rc.register(new JiraffetJsonService(access));
+        rc.register(new ControlService(access));
         rc.register(WadlFeature.class);
         rc.register(JacksonFeature.class);
         rc.packages("com.github.basking2.otternet.http.scanned");
@@ -206,7 +191,7 @@ public class OtterNet implements AutoCloseable {
         }
 
         try {
-            access.stop();
+            access.close();
         }
         catch (final Throwable t) {
             // Nop.

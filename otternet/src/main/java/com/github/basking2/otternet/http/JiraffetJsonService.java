@@ -37,11 +37,9 @@ import org.slf4j.LoggerFactory;
 public class JiraffetJsonService {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetJsonService.class);
 
-    private OtterLog log;
     private OtterAccess access;
 
-    public JiraffetJsonService(final OtterAccess access, final OtterLog log) {
-        this.log = log;
+    public JiraffetJsonService(final OtterAccess access) {
         this.access = access;
     }
 
@@ -133,8 +131,8 @@ public class JiraffetJsonService {
     public Response getBlob(
             @PathParam("instance") final String instance,
             @PathParam("key") final String key
-    ) throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
-        final OtterLog.Blob blobData = log.getBlob(key);
+    ) throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
+        final OtterLog.Blob blobData = access.getLog(instance).getBlob(key);
 
         if (blobData == null) {
             return Response.
@@ -199,9 +197,9 @@ public class JiraffetJsonService {
 
             // Tell the client who the current leader is.
             joinResponse.setLeader(access.getInstance(instance).getCurrentLeader());
-            joinResponse.setTerm(log.getCurrentTerm());
-            joinResponse.setLogId(log.getLogId());
-            joinResponse.setLogCompactionIndex(log.first().getIndex());
+            joinResponse.setTerm(access.getLog(instance).getCurrentTerm());
+            joinResponse.setLogId(access.getLog(instance).getLogId());
+            joinResponse.setLogCompactionIndex(access.getLog(instance).first().getIndex());
 
             if (clientResponse.isSuccess()) {
                 joinResponse.setStatus(JsonResponse.OK);

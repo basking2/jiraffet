@@ -2,7 +2,10 @@ package com.github.basking2.otternet.jiraffet;
 
 import com.github.basking2.jiraffet.*;
 import com.github.basking2.jiraffet.messages.ClientRequest;
+import sun.jvm.hotspot.oops.Instance;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,45 +16,56 @@ import static java.util.Arrays.asList;
 /**
  * Access to many Jiraffet instances.
  */
-public class OtterAccess {
+public class OtterAccess implements Closeable {
 
     private final ScheduledExecutorService scheduledExecutorService;
-    private final JiraffetRaftFactory jiraffetRaftFactory;
+    private final JiraffetIoFactory ioFactory;
+    private final JiraffetLogFactory logFactory;
 
-    private Map<String, Jiraffet> instances;
+    private Map<String, InstanceAndLog> instances;
 
     public OtterAccess(
-            final JiraffetRaftFactory jiraffetRaftFactory,
+            final JiraffetIoFactory ioFactory,
+            final JiraffetLogFactory logFactory,
             final ScheduledExecutorService scheduledExecutorService
     ) {
         this.instances = new HashMap<>();
-        this.jiraffetRaftFactory = jiraffetRaftFactory;
+        this.ioFactory = ioFactory;
+        this.logFactory = logFactory;
         this.scheduledExecutorService = scheduledExecutorService;
     }
 
-    /**
-     * Call {@link JiraffetRaftFactory#getInstance(String)} and make a {@link Jiraffet} instance that uses them.
-     *
-     * @param instanceName The name of the instances. This is the identifier used to access the instance.
-     *
-     * @return The concrete instance.
-     */
     public Jiraffet getInstance(final String instanceName) throws JiraffetIOException {
+        return getInstanceAndLog(instanceName).instance;
+    }
 
+    public JiraffetRaft getRaft(final String instanceName) throws JiraffetIOException {
+        return getInstanceAndLog(instanceName).raft;
+    }
+
+    public OtterLog getLog(final String instanceName) throws JiraffetIOException {
+        return getInstanceAndLog(instanceName).log;
+    }
+
+    private InstanceAndLog getInstanceAndLog(final String instanceName) throws JiraffetIOException {
+
+        // If we have the record, return it.
         if (instances.containsKey(instanceName)) {
             return instances.get(instanceName);
         }
 
-        final Jiraffet j = new Jiraffet(
-                jiraffetRaftFactory.getInstance(instanceName),
-                this.scheduledExecutorService
-        );
+        final OtterIO io = ioFactory.getInstance(instanceName);
+        final OtterLog log = logFactory.getInstance(instanceName, io);
 
-        j.start();
+        final JiraffetRaft raft = new JiraffetRaft(log, io);
 
-        instances.put(instanceName, j);
+        final Jiraffet jiraffet = new Jiraffet(raft, scheduledExecutorService);
 
-        return j;
+        final InstanceAndLog ial = new InstanceAndLog(jiraffet, raft, log);
+
+        instances.put(instanceName, ial);
+
+        return ial;
     }
 
     public Future<OtterAccessClientResponse> clientRequestJoin(final String instanceName, final String id) throws JiraffetIOException {
@@ -118,7 +132,29 @@ public class OtterAccess {
         return future;
     }
 
-    public interface JiraffetRaftFactory {
-        JiraffetRaft getInstance(final String instanceName);
+    @Override
+    public void close() throws IOException {
+        instances.forEach((key, instanceAndLog) -> {
+            instanceAndLog.instance.stop();
+        });
+    }
+
+    public interface JiraffetIoFactory {
+        OtterIO getInstance(final String instanceName);
+    }
+
+    public interface JiraffetLogFactory {
+        OtterLog getInstance(final String instanceName, final OtterIO io);
+    }
+
+    private static class InstanceAndLog {
+        public final OtterLog log;
+        public final Jiraffet instance;
+        public final JiraffetRaft raft;
+        public InstanceAndLog(final Jiraffet instance, final JiraffetRaft raft, final OtterLog log) {
+            this.instance = instance;
+            this.raft = raft;
+            this.log = log;
+        }
     }
 }
