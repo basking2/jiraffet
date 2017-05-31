@@ -18,6 +18,7 @@ public class OtterLog implements JiraffetLog {
     private int currentTerm;
     private int lastApplied;
     private String votedFor;
+    private String instanceName;
 
     /**
      * Uniquely identify this log.
@@ -41,11 +42,9 @@ public class OtterLog implements JiraffetLog {
      */
     private Map<String, Blob> blobStorage;
 
-    private final OtterNet otterNet;
     private final OtterIO io;
 
-    public OtterLog(final OtterNet otterNet, final OtterIO io) {
-        this.otterNet = otterNet;
+    public OtterLog(final String instanceName, final OtterIO io) {
         this.io = io;
         this.lastApplied = 0;
         this.votedFor = "";

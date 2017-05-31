@@ -4,25 +4,57 @@ import com.github.basking2.jiraffet.*;
 import com.github.basking2.jiraffet.messages.ClientRequest;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.*;
 
 import static java.util.Arrays.asList;
 
 /**
- * Adds some methods to write user types.
+ * Access to many Jiraffet instances.
  */
-public class OtterAccess extends Jiraffet {
-    public OtterAccess(JiraffetRaft raft) {
-        super(raft);
+public class OtterAccess {
+
+    private final ScheduledExecutorService scheduledExecutorService;
+    private final JiraffetRaftFactory jiraffetRaftFactory;
+
+    private Map<String, Jiraffet> instances;
+
+    public OtterAccess(
+            final JiraffetRaftFactory jiraffetRaftFactory,
+            final ScheduledExecutorService scheduledExecutorService
+    ) {
+        this.instances = new HashMap<>();
+        this.jiraffetRaftFactory = jiraffetRaftFactory;
+        this.scheduledExecutorService = scheduledExecutorService;
     }
 
-    public OtterAccess(JiraffetRaft raft, ScheduledExecutorService scheduledExecutorService) {
-        super(raft, scheduledExecutorService);
+    /**
+     * Call {@link JiraffetRaftFactory#getInstance(String)} and make a {@link Jiraffet} instance that uses them.
+     *
+     * @param instanceName The name of the instances. This is the identifier used to access the instance.
+     *
+     * @return The concrete instance.
+     */
+    public Jiraffet getInstance(final String instanceName) throws JiraffetIOException {
+
+        if (instances.containsKey(instanceName)) {
+            return instances.get(instanceName);
+        }
+
+        final Jiraffet j = new Jiraffet(
+                jiraffetRaftFactory.getInstance(instanceName),
+                this.scheduledExecutorService
+        );
+
+        j.start();
+
+        instances.put(instanceName, j);
+
+        return j;
     }
 
-    public Future<OtterAccessClientResponse> clientRequestJoin(final String id) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientRequestJoin(final String instanceName, final String id) throws JiraffetIOException {
         byte[] idBytes = id.getBytes();
         byte[] joinRequest = new byte[1 + idBytes.length];
 
@@ -31,10 +63,10 @@ public class OtterAccess extends Jiraffet {
                 put((byte) OtterLog.LogEntryType.JOIN_ENTRY.ordinal()).
                 put(idBytes, 0, idBytes.length);
 
-        return clientRequest(joinRequest);
+        return clientRequest(instanceName, joinRequest);
     }
 
-    public Future<OtterAccessClientResponse> clientRequestLeave(final String id) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientRequestLeave(final String instanceName, final String id) throws JiraffetIOException {
         byte[] idBytes = id.getBytes();
         byte[] leaveRequest = new byte[1 + idBytes.length];
         leaveRequest[0] = (byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal();
@@ -44,10 +76,10 @@ public class OtterAccess extends Jiraffet {
                 put((byte) OtterLog.LogEntryType.LEAVE_ENTRY.ordinal()).
                 put(idBytes, 1, idBytes.length);
 
-        return clientRequest(leaveRequest);
+        return clientRequest(instanceName, leaveRequest);
     }
 
-    public Future<OtterAccessClientResponse> clientAppendBlob(final String key, final String type, final byte[] data) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientAppendBlob(final String instanceName, final String key, final String type, final byte[] data) throws JiraffetIOException {
 
         byte[] blobBytes = new byte[1 + 4 + key.getBytes().length + 4 + type.getBytes().length + 4 + data.length];
         ByteBuffer blobByteBuffer = ByteBuffer.wrap(blobBytes);
@@ -63,13 +95,15 @@ public class OtterAccess extends Jiraffet {
         blobByteBuffer.putInt(data.length);
         blobByteBuffer.put(data);
 
-        return clientRequest(blobBytes);
+        return clientRequest(instanceName, blobBytes);
     }
 
-    public Future<OtterAccessClientResponse> clientRequest(final byte[] message) throws JiraffetIOException {
+    public Future<OtterAccessClientResponse> clientRequest(final String instanceName, final byte[] message) throws JiraffetIOException {
+        final Jiraffet jiraffet = getInstance(instanceName);
+
         final CompletableFuture<OtterAccessClientResponse> future = new CompletableFuture<>();
 
-        append(asList(new ClientRequest() {
+        jiraffet.append(asList(new ClientRequest() {
             @Override
             public byte[] getData() {
                 return message;
@@ -82,5 +116,9 @@ public class OtterAccess extends Jiraffet {
         }));
 
         return future;
+    }
+
+    public interface JiraffetRaftFactory {
+        JiraffetRaft getInstance(final String instanceName);
     }
 }

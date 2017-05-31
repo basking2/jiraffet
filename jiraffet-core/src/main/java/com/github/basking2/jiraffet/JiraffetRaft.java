@@ -449,4 +449,8 @@ public class JiraffetRaft
 
         return currentLeader.equals(io.getNodeId());
     }
+
+    public String getNodeId() {
+        return io.getNodeId();
+    }
 }

@@ -38,9 +38,6 @@ public class OtterNet implements AutoCloseable {
     static private App otterNetApp;
 
     final private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
-    final private OtterIO io;
-    final private OtterLog log;
-    final private JiraffetRaft raft;
     final private OtterAccess access;
     final private Configuration config;
 
@@ -117,17 +114,32 @@ public class OtterNet implements AutoCloseable {
 
         int port = config.getInt("otternet.port", 8080);
 
-        String id = "http://"+ip +":"+port;
+        final String id;
         if (config.getString("otter.id", null) != null) {
             id = config.getString("otter.id");
+        }
+        else {
+            id = "http://" + ip + ":" + port;
         }
 
         LOG.info("Starting OtterNet bound to {}:{} with id {}.", ip, port, id);
 
-        io = new OtterIO(id, new ArrayList<>());
-        log = new OtterLog(this, io);
-        raft = new JiraffetRaft(log, io);
-        access = new OtterAccess(raft, executorService);
+        final OtterAccess.JiraffetRaftFactory raftFactory = new OtterAccess.JiraffetRaftFactory() {
+
+            @Override
+            public JiraffetRaft getInstance(String instanceName) {
+                // How do we communicate?
+                final OtterIO io = new OtterIO(instanceName, id, new ArrayList<>(), executorService);
+
+                // Where is the wrote-once log?
+                final OtterLog log = new OtterLog(instanceName, io);
+
+                // Link them together with some run-time data.
+                return new JiraffetRaft(log, io);
+            }
+        };
+
+        access = new OtterAccess(raftFactory, executorService);
         httpServer = new HttpServer();
 
         final NetworkListener networkListener = new NetworkListener("otter", ip, port);

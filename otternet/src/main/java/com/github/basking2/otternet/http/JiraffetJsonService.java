@@ -16,12 +16,10 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import com.github.basking2.jiraffet.JiraffetRaft;
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
 import com.github.basking2.otternet.jiraffet.OtterAccessClientResponse;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
-import com.github.basking2.otternet.jiraffet.OtterIO;
 import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
@@ -39,14 +37,10 @@ import org.slf4j.LoggerFactory;
 public class JiraffetJsonService {
     private static final Logger LOG = LoggerFactory.getLogger(JiraffetJsonService.class);
 
-    private OtterIO io;
     private OtterLog log;
-    private JiraffetRaft raft;
     private OtterAccess access;
 
-    public JiraffetJsonService(final OtterAccess access, final JiraffetRaft raft, final OtterIO io, final OtterLog log) {
-        this.raft = raft;
-        this.io = io;
+    public JiraffetJsonService(final OtterAccess access, final OtterLog log) {
         this.log = log;
         this.access = access;
     }
@@ -64,48 +58,61 @@ public class JiraffetJsonService {
     
 
     @POST
-    @Path("vote/request")
+    @Path("{instance}/vote/request")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public RequestVoteResponse postVoteRequest(final RequestVoteRequest msg) throws JiraffetIOException {
-        return access.requestVotes(msg);
+    public RequestVoteResponse postVoteRequest(
+            @PathParam("instance") final String instance,
+            final RequestVoteRequest msg
+    ) throws JiraffetIOException {
+        return access.getInstance(instance).requestVotes(msg);
     }
     
     @POST
-    @Path("append/request")
+    @Path("{instance}/append/request")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public AppendEntriesResponse postAppendRequest(final AppendEntriesRequest msg) throws JiraffetIOException {
-        return access.appendEntries(msg);
+    public AppendEntriesResponse postAppendRequest(
+            @PathParam("instance") final String instance,
+            final AppendEntriesRequest msg
+    ) throws JiraffetIOException {
+        return access.getInstance(instance).appendEntries(msg);
     }
 
     @POST
-    @Path("join")
+    @Path("{instance}/join")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response postJoin(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
+    public Response postJoin(
+            @PathParam("instance") final String instance,
+            final JoinRequest join
+    ) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
-        final Future<OtterAccessClientResponse> clientResponseFuture = access.clientRequestJoin(join.getId());
+        final Future<OtterAccessClientResponse> clientResponseFuture = access.clientRequestJoin(instance, join.getId());
 
-        return postJoinResponse(clientResponseFuture);
+        return postJoinResponse(instance, clientResponseFuture);
     }
 
     @POST
-    @Path("leave")
+    @Path("{instance}/leave")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response postLeave(final JoinRequest join) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
+    public Response postLeave(
+            @PathParam("instance") final String instance,
+            final JoinRequest join
+    ) throws InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
 
-        final Future<OtterAccessClientResponse> clientResponseFuture = access.clientRequestLeave(join.getId());
+        final Future<OtterAccessClientResponse> clientResponseFuture = access.clientRequestLeave(instance, join.getId());
 
-        return postJoinResponse(clientResponseFuture);
+        return postJoinResponse(instance, clientResponseFuture);
     }
 
     @POST
-    @Path("blob/{key}")
+    @Path("{instance}/blob/{key}")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.WILDCARD)
     public Response postBlob(
+            @PathParam("instance") final String instance,
             @PathParam("key") final String key,
             @HeaderParam(HttpHeaders.CONTENT_TYPE) @DefaultValue(MediaType.APPLICATION_OCTET_STREAM) final String type,
             final InputStream postBody
@@ -115,15 +122,18 @@ public class JiraffetJsonService {
 
         final byte[] data = IOUtils.toByteArray(postBody);
 
-        final Future<OtterAccessClientResponse> clientResponseFuture =  access.clientAppendBlob(key, type, data);
+        final Future<OtterAccessClientResponse> clientResponseFuture =  access.clientAppendBlob(instance, key, type, data);
 
-        return postBlobResponse(clientResponseFuture, key);
+        return postBlobResponse(instance, clientResponseFuture, key);
     }
 
     @GET
-    @Path("blob/{key}")
+    @Path("{instance}/blob/{key}")
     @Consumes(MediaType.WILDCARD)
-    public Response getBlob(@PathParam("key") final String key) throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
+    public Response getBlob(
+            @PathParam("instance") final String instance,
+            @PathParam("key") final String key
+    ) throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException {
         final OtterLog.Blob blobData = log.getBlob(key);
 
         if (blobData == null) {
@@ -140,7 +150,7 @@ public class JiraffetJsonService {
         return Response.ok(blobData.getData()).type(blobData.getType()).build();
     }
 
-    private Response postBlobResponse(final Future<OtterAccessClientResponse> clientResponseFuture, final String key) {
+    private Response postBlobResponse(final String instance, final Future<OtterAccessClientResponse> clientResponseFuture, final String key) {
         try {
 
             final OtterAccessClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
@@ -148,7 +158,7 @@ public class JiraffetJsonService {
             if (clientResponse.isSuccess()) {
                 return Response.ok(new JsonResponse()).build();
             }
-            else if (io.getNodeId().equals(clientResponse.getLeader())) {
+            else if (access.getInstance(instance).getNodeId().equals(clientResponse.getLeader())) {
                 final JsonResponse jsonResponse = new JsonResponse();
                 jsonResponse.setStatus(JsonResponse.ERROR);
                 jsonResponse.setMessage(clientResponse.getMessage());
@@ -162,7 +172,7 @@ public class JiraffetJsonService {
                         build();
             }
             else {
-                return Response.temporaryRedirect(new URI(clientResponse.getLeader()+"/jiraffet/blob/"+key)).build();
+                return Response.temporaryRedirect(new URI(clientResponse.getLeader()+"/"+instance+"/blob/"+key)).build();
             }
 
         }
@@ -181,14 +191,14 @@ public class JiraffetJsonService {
      * @throws URISyntaxException The URI syntax is not correct for the leader.
      * @throws InterruptedException The waiting thread is interrupted.
      */
-    private Response postJoinResponse(final Future<OtterAccessClientResponse> clientResponseFuture) {
+    private Response postJoinResponse(final String instance, final Future<OtterAccessClientResponse> clientResponseFuture) {
         try {
             final JoinResponse joinResponse = new JoinResponse();
 
             final OtterAccessClientResponse clientResponse = clientResponseFuture.get(30, TimeUnit.SECONDS);
 
             // Tell the client who the current leader is.
-            joinResponse.setLeader(raft.getCurrentLeader());
+            joinResponse.setLeader(access.getInstance(instance).getCurrentLeader());
             joinResponse.setTerm(log.getCurrentTerm());
             joinResponse.setLogId(log.getLogId());
             joinResponse.setLogCompactionIndex(log.first().getIndex());
@@ -196,7 +206,7 @@ public class JiraffetJsonService {
             if (clientResponse.isSuccess()) {
                 joinResponse.setStatus(JsonResponse.OK);
                 return Response.ok(joinResponse).build();
-            } else if (io.getNodeId().equals(clientResponse.getLeader())) {
+            } else if (access.getInstance(instance).getNodeId().equals(clientResponse.getLeader())) {
                 return Response.serverError().entity(joinResponse).build();
             } else if (clientResponse.getLeader() == null) {
                 return Response.
@@ -205,7 +215,7 @@ public class JiraffetJsonService {
                         entity("A leader is not yet elected.").
                         build();
             } else {
-                return Response.temporaryRedirect(new URI(clientResponse.getLeader() + "/jiraffet/join")).build();
+                return Response.temporaryRedirect(new URI(clientResponse.getLeader() + "/"+instance+"/join")).build();
             }
 
         }

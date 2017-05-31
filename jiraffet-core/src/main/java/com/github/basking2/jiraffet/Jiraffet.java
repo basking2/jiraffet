@@ -272,4 +272,11 @@ public class Jiraffet {
         }
     }
 
+    final public String getCurrentLeader() {
+        return raft.getCurrentLeader();
+    }
+
+    final public String getNodeId() {
+        return raft.getNodeId();
+    }
 }
