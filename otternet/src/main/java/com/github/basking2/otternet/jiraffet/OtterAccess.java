@@ -1,6 +1,8 @@
 package com.github.basking2.otternet.jiraffet;
 
 import com.github.basking2.jiraffet.*;
+import com.github.basking2.jiraffet.db.KeyValueMyBatis;
+import com.github.basking2.jiraffet.db.LogDbManager;
 import com.github.basking2.jiraffet.db.LogMyBatis;
 import com.github.basking2.jiraffet.messages.ClientRequest;
 
@@ -47,8 +49,8 @@ public class OtterAccess implements Closeable {
         return getInstanceAndLog(instanceName).log;
     }
 
-    public KeyValueStore getKeyValueStore(final String instanceName) throws JiraffetIOException {
-        return getInstanceAndLog(instanceName).keyValueStore;
+    public KeyValueMyBatis getKeyValueStore(final String instanceName) throws JiraffetIOException {
+        return getInstanceAndLog(instanceName).keyValue;
     }
 
     private InstanceAndLog getInstanceAndLog(final String instanceName) throws JiraffetIOException {
@@ -59,13 +61,17 @@ public class OtterAccess implements Closeable {
         }
 
         final OtterIO io = ioFactory.getInstance(instanceName);
-        final LogMyBatis log = logFactory.getInstance(instanceName, io);
+        final LogDbManager mgr = logFactory.getInstance(instanceName);
+        final LogMyBatis log = mgr.getLogDao();
+        final KeyValueMyBatis keyValue = mgr.getKeyValue();
+
+        log.addApplier(new OtterLogApplier(keyValue, io, log));
 
         final JiraffetRaft raft = new JiraffetRaft(log, io);
 
         final Jiraffet jiraffet = new Jiraffet(raft, scheduledExecutorService);
 
-        final InstanceAndLog ial = new InstanceAndLog(jiraffet, raft, log, new KeyValueStore());
+        final InstanceAndLog ial = new InstanceAndLog(jiraffet, raft, log, keyValue);
 
         instances.put(instanceName, ial);
 
@@ -148,20 +154,20 @@ public class OtterAccess implements Closeable {
     }
 
     public interface JiraffetLogFactory {
-        LogMyBatis getInstance(final String instanceName, final OtterIO io);
+        LogDbManager getInstance(final String instanceName);
     }
 
     private static class InstanceAndLog {
         public final LogMyBatis log;
         public final Jiraffet instance;
         public final JiraffetRaft raft;
-        public final KeyValueStore keyValueStore;
+        public final KeyValueMyBatis keyValue;
 
-        public InstanceAndLog(final Jiraffet instance, final JiraffetRaft raft, final LogMyBatis log, final KeyValueStore keyValueStore) {
+        public InstanceAndLog(final Jiraffet instance, final JiraffetRaft raft, final LogMyBatis log, final KeyValueMyBatis keyValue) {
             this.instance = instance;
             this.raft = raft;
             this.log = log;
-            this.keyValueStore = keyValueStore;
+            this.keyValue = keyValue;
         }
     }
 }

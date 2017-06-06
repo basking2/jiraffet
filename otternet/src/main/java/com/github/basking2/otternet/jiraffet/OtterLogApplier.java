@@ -1,6 +1,7 @@
 package com.github.basking2.otternet.jiraffet;
 
 import com.github.basking2.jiraffet.JiraffetLog;
+import com.github.basking2.jiraffet.db.KeyValueMyBatis;
 import com.github.basking2.jiraffet.db.LogMyBatis;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,12 +16,12 @@ public class OtterLogApplier implements LogMyBatis.Applier {
 
     final private JiraffetLog log;
     final private OtterIO io;
-    final private KeyValueStore keyValueStore;
+    final private KeyValueMyBatis keyValue;
 
-    public OtterLogApplier(final KeyValueStore keyvalueStore, final OtterIO io, final JiraffetLog log) {
+    public OtterLogApplier(final KeyValueMyBatis keyValue, final OtterIO io, final JiraffetLog log) {
         this.log = log;
         this.io = io;
-        this.keyValueStore = keyvalueStore;
+        this.keyValue = keyValue;
     }
 
     @Override
@@ -54,7 +55,7 @@ public class OtterLogApplier implements LogMyBatis.Applier {
                 final byte[] blobDataBytes = new byte[blobDataLen];
                 blobByteBuffer.get(blobDataBytes);
 
-                keyValueStore.put(new String(blobKeyBytes), new KeyValueStore.Blob(new String(blobTypeBytes), blobDataBytes));
+                keyValue.put(new String(blobKeyBytes), new String(blobTypeBytes), blobDataBytes);
                 break;
             case JOIN_ENTRY:
                 final String joinHost = new String(data, 1, data.length - 1);

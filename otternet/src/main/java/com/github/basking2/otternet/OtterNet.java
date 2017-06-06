@@ -10,7 +10,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import com.github.basking2.jiraffet.db.LogDbManager;
 import com.github.basking2.jiraffet.db.LogMyBatis;
 import com.github.basking2.otternet.http.ControlService;
-import com.github.basking2.otternet.jiraffet.KeyValueStore;
 import com.github.basking2.otternet.jiraffet.OtterLogApplier;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
 import com.github.basking2.otternet.util.App;
@@ -140,21 +139,13 @@ public class OtterNet implements AutoCloseable {
          */
         final File logs = new File(System.getProperty("otternet.home"), "logs");
 
-        /**
-         * Key Value storeage.
-         */
-        final KeyValueStore keyValueStore = new KeyValueStore();
-
         final OtterAccess.JiraffetLogFactory logFactory = new OtterAccess.JiraffetLogFactory() {
             @Override
-            public LogMyBatis getInstance(String instanceName, OtterIO io) {
+            public LogDbManager getInstance(String instanceName) {
                 try {
                     final LogDbManager logDbManager = new LogDbManager(new File(logs, instanceName));
-                    LogMyBatis log = logDbManager.getLogDao();
 
-                    log.addApplier(new OtterLogApplier(keyValueStore, io, log));
-
-                    return log;
+                    return logDbManager;
                 } catch (ClassNotFoundException e) {
                     throw new RuntimeException(e);
                 } catch (SQLException e) {

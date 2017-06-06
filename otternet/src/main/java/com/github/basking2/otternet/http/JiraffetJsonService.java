@@ -17,8 +17,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
+import com.github.basking2.jiraffet.db.KeyValueEntry;
 import com.github.basking2.jiraffet.messages.*;
-import com.github.basking2.otternet.jiraffet.KeyValueStore;
 import com.github.basking2.otternet.jiraffet.OtterAccessClientResponse;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
 import org.apache.commons.io.IOUtils;
@@ -132,7 +132,7 @@ public class JiraffetJsonService {
             @PathParam("instance") final String instance,
             @PathParam("key") final String key
     ) throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
-        final KeyValueStore.Blob blobData = access.getKeyValueStore(instance).get(key);
+        final KeyValueEntry blobData = access.getKeyValueStore(instance).getEntry(key);
 
         if (blobData == null) {
             return Response.

@@ -32,9 +32,13 @@ public class KeyValueMyBatis {
     }
 
     public void put(final String key, final byte[] data) {
+        put(key, "application/octet-stream", data);
+    }
+
+    public void put(final String key, final String type, final byte[] data) {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             final KeyValueMapper mapper = session.getMapper(KeyValueMapper.class);
-            mapper.put(key, data);
+            mapper.put(key, type, data);
             session.commit();
         }
     }
@@ -50,6 +54,25 @@ public class KeyValueMyBatis {
     public void clear() {
         try(final SqlSession session = sqlSessionManager.openSession()) {
             session.getMapper(KeyValueMapper.class).clear();
+            session.commit();
+        }
+    }
+
+    public KeyValueEntry getEntry(final String key) {
+        try(final SqlSession session = sqlSessionManager.openSession()) {
+            List<KeyValueEntry> entries = session.getMapper(KeyValueMapper.class).getEntry(key);
+            if (entries.isEmpty()) {
+                return null;
+            }
+            else {
+                return entries.get(0);
+            }
+        }
+    }
+
+    public void putEntry(final KeyValueEntry entry) {
+        try(final SqlSession session = sqlSessionManager.openSession()) {
+            session.getMapper(KeyValueMapper.class).putEntry(entry);
             session.commit();
         }
     }

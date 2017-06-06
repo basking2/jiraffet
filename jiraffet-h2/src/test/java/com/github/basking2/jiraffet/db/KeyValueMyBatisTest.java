@@ -45,4 +45,14 @@ public class KeyValueMyBatisTest {
         assertEquals(null, db.get("a"));
     }
 
+    @Test
+    public void testEntry() throws JiraffetIOException {
+        KeyValueEntry e = new KeyValueEntry("a", "atype", "a".getBytes());
+        db.putEntry(e);
+        KeyValueEntry e2 = db.getEntry(e.getId());
+
+        assertEquals(e.getId(), e2.getId());
+        assertEquals(e.getType(), e2.getType());
+
+    }
 }
