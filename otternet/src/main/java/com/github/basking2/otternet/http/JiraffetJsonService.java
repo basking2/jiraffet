@@ -18,9 +18,9 @@ import javax.ws.rs.core.Response;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.messages.*;
+import com.github.basking2.otternet.jiraffet.KeyValueStore;
 import com.github.basking2.otternet.jiraffet.OtterAccessClientResponse;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
-import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,7 +132,7 @@ public class JiraffetJsonService {
             @PathParam("instance") final String instance,
             @PathParam("key") final String key
     ) throws IOException, InterruptedException, ExecutionException, TimeoutException, URISyntaxException, JiraffetIOException {
-        final OtterLog.Blob blobData = access.getLog(instance).getBlob(key);
+        final KeyValueStore.Blob blobData = access.getKeyValueStore(instance).get(key);
 
         if (blobData == null) {
             return Response.
@@ -198,7 +198,7 @@ public class JiraffetJsonService {
             // Tell the client who the current leader is.
             joinResponse.setLeader(access.getInstance(instance).getCurrentLeader());
             joinResponse.setTerm(access.getLog(instance).getCurrentTerm());
-            joinResponse.setLogId(access.getLog(instance).getLogId());
+            joinResponse.setLogId("FIXME - need ID");
             joinResponse.setLogCompactionIndex(access.getLog(instance).first().getIndex());
 
             if (clientResponse.isSuccess()) {

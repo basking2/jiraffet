@@ -33,6 +33,7 @@ artifacts {
 dependencies {
     compile 'ch.qos.logback:logback-classic:1.1.7'
     compile project(':jiraffet-core')
+    compile project(':jiraffet-h2')
 
     //compile 'org.apache.commons:commons-compress:1.11'
     compile 'commons-io:commons-io:2.5'

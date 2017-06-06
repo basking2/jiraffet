@@ -1,11 +1,17 @@
 package com.github.basking2.otternet;
 
+import java.io.File;
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
+import com.github.basking2.jiraffet.db.LogDbManager;
+import com.github.basking2.jiraffet.db.LogMyBatis;
 import com.github.basking2.otternet.http.ControlService;
+import com.github.basking2.otternet.jiraffet.KeyValueStore;
+import com.github.basking2.otternet.jiraffet.OtterLogApplier;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
 import com.github.basking2.otternet.util.App;
 import org.apache.commons.cli.*;
@@ -21,14 +27,14 @@ import org.slf4j.LoggerFactory;
 
 import com.github.basking2.otternet.http.JiraffetJsonService;
 import com.github.basking2.otternet.jiraffet.OtterIO;
-import com.github.basking2.otternet.jiraffet.OtterLog;
 import com.github.basking2.otternet.util.Ip;
 
 /**
  * Startup Main line that does surprisingly little of the work and magic.
  * 
  * @see OtterIO
- * @see OtterLog
+ * @see OtterAccess
+ * @see OtterLogApplier
  */
 public class OtterNet implements AutoCloseable {
     final HttpServer httpServer;
@@ -39,7 +45,7 @@ public class OtterNet implements AutoCloseable {
     final private OtterAccess access;
     final private Configuration config;
 
-    public static final void main(final String[] argv) throws InterruptedException, IOException, ConfigurationException, ParseException {
+    public static final void main(final String[] argv) throws InterruptedException, IOException, ConfigurationException, ParseException, SQLException, ClassNotFoundException {
 
         // Parse CLI arguments.
         mainParseArgs(argv);
@@ -102,7 +108,7 @@ public class OtterNet implements AutoCloseable {
         //================================================================================
     }
 
-    public OtterNet() throws ConfigurationException {
+    public OtterNet() throws ConfigurationException, SQLException, ClassNotFoundException {
         config = otterNetApp.buildConfiguration();
 
         String ip = config.getString("otternet.addr", "0.0.0.0");
@@ -129,10 +135,31 @@ public class OtterNet implements AutoCloseable {
             }
         };
 
+        /**
+         * Where all the databases get created.
+         */
+        final File logs = new File(System.getProperty("otternet.home"), "logs");
+
+        /**
+         * Key Value storeage.
+         */
+        final KeyValueStore keyValueStore = new KeyValueStore();
+
         final OtterAccess.JiraffetLogFactory logFactory = new OtterAccess.JiraffetLogFactory() {
             @Override
-            public OtterLog getInstance(String instanceName, OtterIO io) {
-                return new OtterLog(instanceName, io);
+            public LogMyBatis getInstance(String instanceName, OtterIO io) {
+                try {
+                    final LogDbManager logDbManager = new LogDbManager(new File(logs, instanceName));
+                    LogMyBatis log = logDbManager.getLogDao();
+
+                    log.addApplier(new OtterLogApplier(keyValueStore, io, log));
+
+                    return log;
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
             }
         };
 

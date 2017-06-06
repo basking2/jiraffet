@@ -2,8 +2,8 @@ package com.github.basking2.otternet.http;
 
 import com.github.basking2.jiraffet.JiraffetIOException;
 import com.github.basking2.jiraffet.JiraffetLog;
+import com.github.basking2.jiraffet.db.LogMyBatis;
 import com.github.basking2.otternet.jiraffet.OtterAccess;
-import com.github.basking2.otternet.jiraffet.OtterLog;
 import org.glassfish.jersey.jackson.JacksonFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +46,7 @@ public class ControlService {
      * Instruct this node to join another cluster.
      *
      * @param node The node to join to and seek to be our new leader.
+     * @param instance The raft instance to join.
      * @return The response from the target node.
      * @throws IOException On an IO exception.
      * @throws JiraffetIOException On a JiraffetRaft exception.
@@ -77,16 +78,9 @@ public class ControlService {
             LOG.info("Got response from node {}. Setting leader {} with term {}.", node, r.getLeader(), r.getTerm());
             access.getRaft(instance).setNewLeader(r.getLeader(), r.getTerm());
 
-            final OtterLog log = access.getLog(instance);
+            final LogMyBatis log = access.getLog(instance);
 
-            if (log.getLogId().equals(r.getLogId())) {
-                log.deleteBefore(r.getLogCompactionIndex());
-            }
-            else {
-                log.clear();
-                log.setLogId(r.getLogId());
-                log.setLastApplied(r.getLogCompactionIndex()-1);
-            }
+            log.deleteBefore(r.getLogCompactionIndex());
 
             return r;
         }
