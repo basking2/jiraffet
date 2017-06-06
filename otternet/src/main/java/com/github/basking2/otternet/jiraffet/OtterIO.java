@@ -22,10 +22,9 @@ import com.github.basking2.jiraffet.messages.RequestVoteResponse;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
+import javax.xml.ws.WebServiceClient;
 
 public class OtterIO implements JiraffetIO {
-
-    public static final String DEFAULT_INSTANCE_NAME = "jiraffet";
 
     /**
      * The name of the raft instance to be communicated with.
@@ -54,7 +53,7 @@ public class OtterIO implements JiraffetIO {
      *
      * The executor is created by {@link Executors#newCachedThreadPool()}.
      *
-     * @param instanceName The name of the raft instance to communicate with.
+     * @param instanceName The name of the instance to operate on.
      * @param nodeId This node's network ID. Typically {@code http://myhost:myport}.
      * @param nodes A list of node IDs we can connect too.
      *
@@ -72,7 +71,7 @@ public class OtterIO implements JiraffetIO {
     /**
      * Constructor that provides the user access to defining the {@link ExecutorService}.
      *
-     * @param instanceName The name of the raft instance to communicate with.
+     * @param instanceName The name of the instance to operate on.
      * @param nodeId This node's network ID. Typically {@code http://myhost:myport}.
      * @param nodes A list of node IDs we can connect too.
      * @param executorService The executor service that will be used for IO operation.
@@ -89,6 +88,7 @@ public class OtterIO implements JiraffetIO {
         this.executorService = executorService;
 
         this.clientBuilderConfiguration = new ClientConfig().
+            property(ClientProperties.FOLLOW_REDIRECTS, true).
             property(ClientProperties.READ_TIMEOUT, 1000).
             property(ClientProperties.CONNECT_TIMEOUT, 1000).
             register(JacksonFeature.class);
@@ -156,6 +156,7 @@ public class OtterIO implements JiraffetIO {
             public AppendEntriesResponse call() throws Exception {
                 return ClientBuilder.newClient(clientBuilderConfiguration).
                         target(node).
+                        property(ClientProperties.FOLLOW_REDIRECTS, true).
                         path("/"+instanceName+"/append/request").
                         request(MediaType.APPLICATION_JSON).
                         buildPost(Entity.entity(req, MediaType.APPLICATION_JSON)).

@@ -165,6 +165,26 @@ public class LogMyBatis implements JiraffetLog {
         }
     }
 
+    public EntryMeta first() {
+        try(final SqlSession session = sqlSessionManager.openSession()) {
+            final LogMapper mapper = session.getMapper(LogMapper.class);
+            final EntryMeta meta = mapper.first();
+            if (meta == null) {
+                return new EntryMeta(0,0);
+            }
+            else {
+                return meta;
+            }
+        }
+    }
+
+    public void deleteBefore(final int index) {
+        try(final SqlSession session = sqlSessionManager.openSession()) {
+            final LogMapper mapper = session.getMapper(LogMapper.class);
+            mapper.deleteBefore(index);
+        }
+    }
+
     @FunctionalInterface
     public interface Applier {
         void apply(int index) throws Exception;

@@ -65,4 +65,13 @@ public interface LogMapper {
     })
     JiraffetLog.EntryMeta last();
 
+    @Select("SELECT index, term FROM ENTRIES ORDER BY index DESC LIMIT 1")
+    @ConstructorArgs({
+            @Arg(column = "term", javaType=Integer.class),
+            @Arg(column = "index", javaType=Integer.class)
+    })
+    JiraffetLog.EntryMeta first();
+
+    @Delete("DELETE FROM ENTRIES WHERE index < #{value}")
+    void deleteBefore(int index);
 }
