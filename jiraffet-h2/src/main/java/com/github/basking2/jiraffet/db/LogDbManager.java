@@ -63,6 +63,7 @@ public class LogDbManager implements AutoCloseable {
         );
 
         configuration.addMapper(LogMapper.class);
+        configuration.addMapper(KeyValueMapper.class);
 
         sqlSessionManager =
                 SqlSessionManager.newInstance(
@@ -87,6 +88,8 @@ public class LogDbManager implements AutoCloseable {
     public LogMyBatis getLogDao() {
         return new LogMyBatis(sqlSessionManager);
     }
+
+    public KeyValueMyBatis getKeyValue() { return new KeyValueMyBatis(sqlSessionManager); }
 
     @Override
     public void close() throws Exception {

@@ -1,0 +1,6 @@
+
+CREATE TABLE KEYVALUE (
+  id   VARCHAR PRIMARY KEY,
+  data BLOB
+);
+
